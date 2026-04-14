@@ -1,0 +1,80 @@
+fixture_id: pi_t2_n01
+category: prompt_injection
+source_type: direct_http
+vuln_subtype: DPI-5
+verdict: negative
+expected_check_id: code-prompt-injection-risk
+expected_severity: critical
+defense_present:
+  - name: bedrock_apply_guardrail_input
+    recognized: true
+    description: "bedrock.apply_guardrail called on the chat_input prompt before executor.invoke; endpoint refuses on GUARDRAIL_INTERVENED. Guardrail runs at the trust boundary, blocks rather than logs, covers the full untrusted source."
+adversarial_construction: verbatim_tp_plus_synthetic_defense
+adversarial_pair: pi_t2_001
+source: github
+source_url: https://github.com/ReversecLabs/damn-vulnerable-llm-agent/blob/main/main.py
+source_commit: c0cf9a14adad76e9d6a53c41741f625334bd9971
+source_lines: L1-L95
+license: Apache-2.0
+labeled_by: claude+kkmookhey
+labeled_at: 2026-04-12
+reasoning: |
+  Adversarial pair to pi_t2_001. The base code (Streamlit chat_input +
+  LangChain ConversationalChatAgent with tool access) is preserved
+  verbatim from the source repo. The ONLY difference is the insertion
+  of a Bedrock Guardrails pre-call:
+
+    if guardrail_blocks(prompt):
+        refuse
+    else:
+        executor.invoke(prompt)
+
+  This is the "inspired-by Tier 2 source with synthetic defense added"
+  pattern — allowed under our corpus hygiene rules because both sides
+  of the pair are clearly documented (TP is verbatim-attributed, TN is
+  verbatim-base + one added defense). The adversarial-pair value is
+  that the scanner has to learn that ~20 lines of code (guardrail
+  helper + if/else branch) are the entire delta between a critical
+  vulnerability and a properly defended app.
+
+  Defense analysis:
+    - ORDERING: guardrail_blocks() runs BEFORE executor.invoke(prompt).
+      Stage 3 LLM triage must confirm ordering — if the guardrail call
+      was after the agent invocation, it would be pointless.
+    - REJECTION: on GUARDRAIL_INTERVENED the code shows a refusal
+      message and does NOT call the executor. Stage 3 must confirm
+      the blocking code path exists — a log-only guardrail does not
+      count.
+    - INPUT COVERAGE: the FULL user prompt is passed to the guardrail
+      (`content=[{"text": {"text": prompt}}]`). Not a truncated or
+      transformed version. Stage 3 must confirm the guardrail sees
+      the same untrusted content that reaches the LLM.
+    - RECOGNIZED: bedrock.apply_guardrail is on the recognized-guardrail
+      list in README. `recognized: true`.
+
+  verdict: negative. defense_present has one recognized: true entry →
+  binary rule fires TN.
+
+  IMPORTANT CAVEAT documented in the fixture code: this input-side
+  defense does NOT fix the underlying authorization gap in pi_t2_002
+  (tools.py accepts any userId). A subtle injection that bypasses the
+  Bedrock PROMPT_ATTACK filter could still reach the unprotected tool
+  layer. A real production fix would layer BOTH:
+    1. This input guardrail (the TN above), AND
+    2. Session-bound userId enforcement at the tool layer (a fix to
+       pi_t2_002 we haven't synthesized yet).
+
+  For the prompt_injection category in Phase A, this fixture is a TN
+  because the injection-entry-point is defended. The tool-layer gap
+  is a separate concern tracked under `agent_unrestricted_tools` in
+  Phase E (not Phase A scope).
+
+  This tension — "defended at one layer, vulnerable at another" — is
+  a real-world pattern we'll see frequently. The scanner's per-category
+  verdict is correct even when the system-level security posture is
+  still flawed. The aggregate remediation message in Phase E will call
+  out the layered problem.
+
+  License on the synthetic defended variant: the base code is
+  Apache-2.0 (inherited from the repo); the added defense is synthetic
+  (our authorship). Both licenses are on the allowlist, no contamination.

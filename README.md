@@ -1,0 +1,158 @@
+# Whitney
+
+**Open-source static AI security scanner — finds prompt injection patterns that commodity scanners miss, without burning LLM API credits on every run.**
+
+Whitney is a curated [Semgrep](https://semgrep.dev) ruleset plus a thin Python wrapper plus an opt-in LLM-as-judge triage layer plus an AI dependency SBOM extractor. Zero custom SAST. Zero LLM calls in the default path. Python-only for now (TS/JS/Go on the roadmap).
+
+```bash
+pip install whitney-scanner
+whitney scan ./your-repo
+```
+
+```
+SEVERITY  FILE                                                       :LINE  TITLE
+critical  app/handlers/chat.py                                       :42    LangChain SQLDatabaseChain with user-controlled question (P2SQL)
+critical  app/main.py                                                :89    pandas_dataframe_agent.run with user input — arbitrary code exec
+high      app/api.py                                                 :17    Flask handler interpolates request.json into LLM prompt
+high      app/rag.py                                                 :55    WebBaseLoader fetched content flows into LLM chain unfiltered
+```
+
+## What it finds
+
+Prompt injection across **15 source types**:
+
+| Class | Source types covered |
+|---|---|
+| **Direct** | `direct_http` (Flask/FastAPI/Django), `direct_cli` (argparse/click/stdin), `direct_voice` (Whisper/Twilio SpeechResult) |
+| **Indirect fetched** | `indirect_rag` (Chroma/Pinecone/Weaviate/pgvector), `indirect_web_fetch` (requests/WebBaseLoader/SeleniumURLLoader), `indirect_file_upload` (PyPDFLoader/UnstructuredFileLoader), `indirect_email` (SES/SNS), `indirect_search` (Tavily/SerpAPI/Brave/Google CSE) |
+| **Indirect agent** | `indirect_tool_response` (LangChain tool return values), `indirect_mcp` (MCP call_tool responses), `indirect_a2a` (CrewAI/LangGraph agent-to-agent context handoff) |
+| **Indirect stored** | `indirect_db_stored` (DB query results into prompts), `indirect_memory_stored` (Mem0/Zep/LangChain memory replay) |
+| **Cross-modal** | `cross_modal_image_ocr` (pytesseract/easyocr), `cross_modal_unicode` (tag block/ZWJ/homoglyphs) |
+
+Plus **critical sinks by presence alone**: LangChain `PALChain` / `PythonAstREPLTool` (CVE-2023-36258 class) and `SQLDatabaseChain` / `create_sql_agent` / `NLSQLTableQueryEngine` (P2SQL class).
+
+Plus an **AI dependency SBOM** (`whitney sbom`) — a CycloneDX 1.5 inventory of the AI SDKs and models discovered in `requirements.txt`, `pyproject.toml`, `package.json`, and `model=...` source assignments. Includes a small known-vulnerable SDK version table.
+
+## Why it exists
+
+The commodity static AI rulesets (Semgrep `p/ai-best-practices`, Bandit, Agent Audit) only catch ~30–50% of real prompt-injection patterns and are completely blind to indirect injection (RAG retrievals, web fetches, tool responses, agent-to-agent context handoffs). Whitney targets that gap.
+
+| Scanner | Corpus recall | Corpus precision | Corpus F1 | Findings on 6 real-world AI repos |
+|---|---|---|---|---|
+| **Whitney default (no LLM)** | **1.000** | 0.897 | 0.945 | **47** |
+| **Whitney triage-on (opt-in)** | **1.000** | **1.000** | **1.000** | **47** |
+| Semgrep `p/ai-best-practices` | 0.500 | 0.867 | 0.634 | 14 |
+| Agent Audit 0.18.2 | 0.308 | 0.571 | 0.400 | — |
+| Bandit / Semgrep `p/security-audit` | 0.000 | — | — | 0 |
+
+The corpus is **35 hand-labelled fixtures** (26 positives + 9 negatives) spanning all 15 source types, shipped in `tests/corpus/`. Every fixture has a YAML sidecar with `source_url`, `source_commit`, `vuln_subtype`, and labelling rationale. Reproduce locally with `python -m tests.corpus.eval`.
+
+On **5 blind-test repositories** that were never used to develop the rules — `aimaster-dev/chatbot-using-rag-and-langchain`, `Lizhecheng02/RAG-ChatBot`, `SachinSamuel01/rag-langchain-streamlit`, `streamlit/example-app-langchain-rag`, `Vigneshmaradiya/ai-agent-comparison` — Whitney produces 11 findings, of which 9 are true positives and 2 are false positives in developer `main()` test harnesses. **81.8% precision, hand-audited.** Full audit table in `tests/corpus/DIFFERENTIAL.md`.
+
+## Recognised defences
+
+Whitney suppresses findings only when a **vendor guardrail** or **correct LLM-as-judge** is called on the untrusted content before it reaches the LLM:
+
+- AWS Bedrock Guardrails (`apply_guardrail`, `GuardrailIdentifier=` on `invoke_model`)
+- Azure AI Content Safety / Prompt Shields (`ContentSafetyClient.detect_jailbreak`)
+- Lakera Guard (`api.lakera.ai` or SDK calls)
+- NeMo Guardrails (`LLMRails.generate`, wrapping-style)
+- DeepKeep AI firewall (`dk_request_filter`)
+- OpenAI Moderation (`client.moderations.create`)
+- Correct LLM-as-judge (classified via the opt-in triage layer — see [`docs/TRIAGE.md`](docs/TRIAGE.md))
+
+Weak defences are **explicitly not counted**: regex/Pydantic string validation, length caps, keyword blocklists, system-prompt admonitions. All bypassable via Unicode, homoglyphs, Base64, language switching, or paraphrase. Whitney still records their presence in `details["defense_present"]` so remediation messages can point the developer at a stronger replacement.
+
+## Architecture
+
+```
+whitney/
+├── scanner.py           # public scan_repository(path) entry point
+├── semgrep_runner.py    # subprocess wrapper around Semgrep CLI
+├── llm_triage.py        # opt-in LLM-as-judge classifier (Claude Opus or mock)
+├── sbom.py              # AI dependency SBOM scanner (CycloneDX 1.5)
+├── models.py            # stdlib @dataclass Finding (no pydantic)
+├── cli.py               # `whitney scan|sbom|version` command-line interface
+└── rules/
+    ├── prompt_injection_taint.yaml          # Semgrep taint mode — flow detection
+    ├── prompt_injection_critical_sinks.yaml # PAL chain + SQL chain — presence alone
+    └── prompt_injection_structural.yaml     # CrewAI / LLMChain / WebBaseLoader idioms
+```
+
+Three Semgrep rule files, each with a distinct detection philosophy:
+
+1. **`prompt_injection_taint.yaml`** — single consolidated taint rule. 50+ pattern-sources, 25+ pattern-sanitizers, 40+ pattern-sinks, surgical `pattern-not` exclusions for UI/storage shapes that aren't real LLM sinks. Catches direct and indirect prompt injection where the vulnerability is a data flow.
+
+2. **`prompt_injection_critical_sinks.yaml`** — AST pattern rules for sinks where **presence alone is critical** (no taint flow required): PAL chains, SQL chains, tool-calling executors with arbitrary code paths.
+
+3. **`prompt_injection_structural.yaml`** — AST pattern rules for **code shapes** where the vulnerability is the structure, not the data flow: CrewAI `Task(..., context=[upstream_task])` agent handoff, LangChain `LLMChain` idiom, `WebBaseLoader` + chain, `PdfReader` + LLM.
+
+Each rule has function-level guardrail suppression via `pattern-not-inside: def $F(...): ... $BEDROCK.apply_guardrail(...) ...` for recognised defences.
+
+Total Python: ~800 lines across `scanner.py`, `semgrep_runner.py`, `llm_triage.py`, `sbom.py`, `models.py`, `cli.py`. No custom taint engine, no tree-sitter walker, no custom AST analysis. Semgrep does all the work.
+
+## Zero-LLM default, opt-in triage
+
+The default scan path (`whitney scan ./repo` or `scan_repository(path)` without setting any env var) has **zero LLM calls** and produces byte-identical output across runs. Two opt-in modes layer on top:
+
+```bash
+# Default — Semgrep only, no API calls, fully reproducible
+whitney scan ./my-repo
+
+# Mock triage — structural heuristic for LLM-as-judge correctness, no API calls
+WHITNEY_STRICT_JUDGE_PROMPTS=1 WHITNEY_TRIAGE_MOCK=1 whitney scan ./my-repo
+
+# Real triage — calls Claude Opus to classify LLM-as-judge prompts
+export ANTHROPIC_API_KEY=sk-ant-...
+WHITNEY_STRICT_JUDGE_PROMPTS=1 whitney scan ./my-repo
+```
+
+Real-mode triage uses `claude-opus-4-6` at `temperature=0` with cached verdicts keyed by `(model_id, prompt_version, code_hash)`, so repeat scans of unchanged code cost nothing. Cost cap of 50 classifier calls per scan, fail-open on any error. See [`docs/TRIAGE.md`](docs/TRIAGE.md) for full operator instructions, cost estimates, and troubleshooting.
+
+## Path excludes
+
+Path excludes are applied automatically: `venv`, `.venv`, `env`, `__pycache__`, `node_modules`, `tests`, `test_*`, `fixtures`, `examples`, `docs`, `dist`, `build`, `site-packages`. A finding inside a test fixture is a false positive from the developer's perspective, regardless of its technical correctness.
+
+## What gets emitted
+
+```python
+from whitney import scan_repository
+findings = scan_repository("./my-repo")
+
+for f in findings:
+    print(f.severity.value, f.check_id, f.details["file_path"], f.details["line_number"])
+    print("  CWE:", f.details["cwe"])
+    print("  OWASP LLM Top 10:", f.details["owasp"])
+    print("  OWASP Agentic:", f.details["owasp_agentic"])
+```
+
+Each finding carries:
+
+- `check_id`, `title`, `description`, `severity`, `remediation`
+- `details.file_path`, `details.line_number`, `details.end_line`, `details.code_snippet`
+- `details.cwe` — e.g. `["CWE-94"]`
+- `details.owasp` — OWASP LLM Top 10 year-specific tag, e.g. `["LLM01:2025"]`
+- `details.owasp_agentic` — OWASP Agentic Top 10, e.g. `["AA01:2026"]`
+- `details.confidence` — `HIGH` / `MEDIUM` / `LOW`
+- `details.technology` — frameworks recognised in the rule
+
+CWE and the two OWASP families ship in the rule YAML metadata directly — they're free with every finding. Regulatory framework enrichment (ISO 42001, EU AI Act, NIST AI RMF, MITRE ATLAS) is the responsibility of downstream tooling that consumes Whitney's findings; the [Shasta](https://github.com/transilienceai/shasta) compliance package is one such consumer.
+
+## Known limitations
+
+- **Intra-file only.** Semgrep OSS taint is intraprocedural and intra-file. Cross-file flows (taint source in `handlers/chat.py`, LLM sink in `services/llm.py`) are not tracked. This was empirically validated against 3 real-world repos — every vulnerable flow was intra-file — but larger monorepos may need Semgrep Pro or a future structural-rule extension.
+- **Python only.** TypeScript / JavaScript / Go support is on the roadmap. The rule authoring approach transfers directly once the source/sink taxonomies are filled in.
+- **Guardrail policy validation is out of scope.** If a developer calls `bedrock.apply_guardrail(GuardrailIdentifier="xxx")`, Whitney trusts that the policy "xxx" actually covers prompt injection. Validating the policy content would require pulling the policy definition from AWS at scan time.
+- **2 known FP patterns in blind tests.** Developer `main()` test harnesses with hardcoded queries inside a helper file can produce false positives if the helper imports RAG retrievers. Surfaces at 81.8% precision on never-previously-scanned real-world code — the cost of keeping `def main():` entry points in scope so legitimate CLI apps are still caught.
+
+## See also
+
+- [**docs/TRIAGE.md**](docs/TRIAGE.md) — operator guide for the opt-in LLM-as-judge triage layer
+- [**docs/SCANNER.md**](docs/SCANNER.md) — deeper architectural notes on the rule files
+- [**tests/corpus/DIFFERENTIAL.md**](tests/corpus/DIFFERENTIAL.md) — full benchmark against every commodity scanner tested
+- [**tests/corpus/README.md**](tests/corpus/README.md) — how the labelled corpus is structured and how to add a fixture
+- [**Shasta**](https://github.com/transilienceai/shasta) — sibling project covering cloud AI governance (AWS Bedrock / SageMaker, Azure OpenAI / ML), the regulatory framework mappings (ISO 42001, EU AI Act, NIST AI RMF, MITRE ATLAS), policy generation, dashboards, and reports
+
+## License
+
+Apache-2.0. See [LICENSE](LICENSE).

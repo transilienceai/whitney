@@ -1,0 +1,77 @@
+fixture_id: pi_t2_n04
+category: prompt_injection
+source_type: direct_http
+vuln_subtype: DPI-5
+verdict: negative
+expected_check_id: code-prompt-injection-risk
+expected_severity: critical
+defense_present:
+  - name: llm_as_judge_input_and_output
+    recognized: true
+    description: "Dedicated LLM-as-Judge pre-call on question (p2sql_injection_lv5_template_for_input_judge) BEFORE db_chain.run; rejects with ValueError on non-'yes' verdict. Second LLM-as-Judge post-call on result checks for confidential info. Both judges use secure_tag nonce to resist prompt hardening."
+adversarial_construction: fully_real
+adversarial_pair: pi_t2_005
+source: github
+source_url: https://github.com/13o-bbr-bbq/Broken_LLM_Integration_App/blob/main/chatapp/backend/app/llm_agent.py
+source_commit: 90d3f955f9e024175dd01f37d55a1bf263d91013
+source_lines: p2sql_injection_lv5 function (approx L216-L254)
+license: MIT
+labeled_by: claude+kkmookhey
+labeled_at: 2026-04-12
+reasoning: |
+  FULLY_REAL adversarial pair to pi_t2_005. Both halves verbatim from
+  the upstream repo. This is the LLM-as-Judge variant of the P2SQL
+  defense — demonstrates that LLM-as-Judge is a recognized defense
+  shape, distinct from vendor-API guardrails.
+
+  Defense analysis:
+    - RECOGNIZED: LLM-as-Judge is on the recognized-defense list. The
+      pattern is a dedicated secondary LLM call that classifies the
+      input as "safe" or "unsafe" BEFORE the vulnerable main chain
+      runs.
+    - ORDERING: judge_llm_chain.run() executes before
+      create_db_chain().run(prompt). The main chain only runs if the
+      judge returns "yes". Verified in code.
+    - REJECTION: on non-"yes" verdict, the function raises
+      ValueError("Prompt Attack Detected.") which the FastAPI handler
+      catches and returns as an error response to the client. The main
+      chain never executes. Verified in code.
+    - INPUT COVERAGE: the full `question` is passed to the judge via
+      `{"question": question, "secure_tag": uuid.uuid4()}`. Same input
+      the main chain would see.
+    - BONUS OUTPUT CHECK: there's a second judge call on the result
+      (p2sql_injection_lv5_template_for_output_judge). This catches
+      attacks that smuggle through the input judge but reveal
+      confidential data in the output. Two-direction defense.
+    - SECURE_TAG: the uuid.uuid4() secure_tag is a fresh nonce passed
+      to both judge templates. This is a hardening technique against
+      "prompt injection against the judge itself" — the attacker
+      can't know the secure_tag at attack time, so they can't craft
+      a payload that includes it to fool the judge into reporting safe.
+
+  STAGE 3 CAVEAT: under our binary defense model, "LLM-as-judge is
+  recognized" depends on the judge prompt being correct. Stage 3 LLM
+  triage should inspect p2sql_injection_lv5_template_for_input_judge
+  to validate it actually enumerates the attack variants we care about
+  (SQL-specific injection, table-name exfiltration, UNION attacks,
+  etc.). For Phase A corpus purposes, we mark recognized: true based
+  on the structural presence of the judge pattern. Phase D Stage 3
+  will inspect the template content for effectiveness.
+
+  Verdict: negative. Recognized defense (LLM-as-Judge input pre-call)
+  with correct structural pattern, binary rule fires TN.
+
+  The code diff between pi_t2_005 and pi_t2_n04:
+    pi_t2_005: ~10 lines, just format() + db_chain.run()
+    pi_t2_n04: ~35 lines with judge_llm_chain.run() branching,
+               output judge, secure_tag nonces, ValueError rejection
+  The 25-line defensive scaffold is the security delta. A simple
+  Stage 1 rule that greps "db_chain.run" will flag BOTH as TP —
+  Stage 3 LLM triage is required to recognize the LLM-as-Judge
+  branching structure and flip pi_t2_n04 to TN.
+
+  This is the second fully_real pair in the corpus. Combined with
+  pi_t2_003↔pi_t2_n02 (NeMo for prompt leaking), it gives us
+  coverage of TWO different recognized defenses AND TWO different
+  attack classes, all from the same source repo with consistent
+  provenance.

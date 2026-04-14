@@ -1,0 +1,75 @@
+fixture_id: pi_t2_003
+category: prompt_injection
+source_type: direct_http
+vuln_subtype: DPI-5
+verdict: positive
+expected_check_id: code-prompt-injection-risk
+expected_severity: high
+defense_present: []
+adversarial_pair: pi_t2_n02
+source: github
+source_url: https://github.com/13o-bbr-bbq/Broken_LLM_Integration_App/blob/main/chatapp/backend/app/llm_agent.py
+source_commit: 90d3f955f9e024175dd01f37d55a1bf263d91013
+source_lines: prompt_leaking_lv1 function (approx L19-L28)
+license: MIT
+labeled_by: claude+kkmookhey
+labeled_at: 2026-04-12
+reasoning: |
+  Tier 2 verbatim fixture. The repo is a FastAPI + LangChain + MySQL
+  vulnerable chatbot explicitly designed as a graduated-difficulty
+  CTF. It exposes the same attack class at 5 defense levels:
+    - lv1: no guard (this fixture — TP baseline)
+    - lv2: input/output filters
+    - lv3: prompt hardener (system-prompt admonition)
+    - lv4: NeMo Guardrails (this fixture's adversarial pair — pi_t2_n02)
+    - lv5: DeepKeep firewall
+
+  This structure gives us FULLY_REAL adversarial pairs — both the
+  vulnerable and the defended halves exist in the same source repo,
+  authored by the same maintainers, with no synthetic intervention from
+  us. This is the gold-standard Tier 2 material.
+
+  VULN_SUBTYPE classification: `DPI-5` (Template variable). The
+  vulnerability surface is LangChain's `PromptTemplate(template=...,
+  input_variables=["question"])` followed by `llm_chain.run(question)`.
+  The `question` is user-controlled (from the FastAPI POST /prompt-
+  leaking-lv1 handler in main.py → message.text → here). The
+  template string (`prompt_leaking_lv1_template`) is defined in
+  llm_prompt_templates.py and interpolates `{question}` directly.
+
+  SOURCE_TYPE classification: `direct_http`. The untrusted source is
+  the FastAPI endpoint's request body.
+
+  Severity HIGH (not critical) because:
+    (a) The vulnerability is prompt-leaking (reveals the system prompt
+        / hidden context), not tool execution or data exfiltration.
+    (b) No agent tool access in the chain — just a plain LLMChain.
+    (c) If the same shape drove a tool call or DB query, severity would
+        be critical (and in fact the repo has separate p2sql_injection_*
+        and llm_shell_* endpoints for those threat models — worth
+        separate fixtures in future batches).
+
+  defense_present is empty. No input_filter, no output_filter, no
+  guardrail wrapping, no NeMo rails. This is the baseline unprotected
+  endpoint by design.
+
+  Attribution: verbatim function copy. The imports have been made
+  explicit (in the source file they use `from .llm_prompt_templates
+  import *` wildcard imports which would fail license/style checks;
+  changed to explicit imports but the function body is unchanged).
+  License MIT, on allowlist. Full source_url + source_commit populated.
+
+  Stage 1 enumeration target: pattern is "PromptTemplate(template=<name>,
+  input_variables=[<var>]) + LLMChain + .run(<var>)" where <var> traces
+  back to a FastAPI/Flask/Django request handler. Stage 2 data flow
+  must resolve `prompt_leaking_lv1_template` to its definition in
+  llm_prompt_templates.py to confirm the template interpolates the
+  user-controlled variable verbatim (as opposed to using it as a
+  typed function argument).
+
+  The adversarial pair pi_t2_n02 is the SAME function structure with
+  one key addition: the NeMo Guardrails wrapper. The code diff between
+  the two is ~3 lines. This pair tests whether the scanner can
+  distinguish "LLMChain with user input" (TP) from "LLMChain with
+  user input + rails" (TN) purely on the presence of the rails
+  composition.

@@ -1,0 +1,62 @@
+fixture_id: pi_019
+category: prompt_injection
+source_type: direct_cli
+vuln_subtype: DPI-1
+verdict: positive
+expected_check_id: code-prompt-injection-risk
+expected_severity: medium
+defense_present: []
+adversarial_pair: ""
+source: synthetic
+source_url: ""
+source_commit: ""
+source_lines: ""
+license: synthetic
+labeled_by: claude+kkmookhey
+labeled_at: 2026-04-12
+reasoning: |
+  Direct CLI prompt injection via argparse. The untrusted source is
+  the --question command-line argument. The question flows into an
+  f-string prompt that goes to openai.chat.completions.create with
+  no guardrail.
+
+  SOURCE_TYPE: direct_cli. Distinct from direct_http because the
+  threat model differs — CLI tools are usually run by a single local
+  user who controls their own input, making the surface look benign.
+  The threat appears when:
+    - The CLI is wrapped in a shell script that feeds external data
+      (e.g., `llm --question "$(cat file.txt)"`) — file.txt becomes
+      the untrusted source.
+    - The CLI runs in CI/CD contexts where input comes from git
+      metadata, PR descriptions, commit messages, or webhook payloads.
+    - The CLI runs with elevated privileges (sudo wrapper, systemd
+      unit) and a less-privileged user can influence its args.
+    - The CLI outputs are used in automation (the attacker controls
+      what the model is told, which controls what the automation
+      does next).
+
+  VULN_SUBTYPE: DPI-1 (F-string injection). Classic f-string
+  interpolation of untrusted content into a prompt.
+
+  Severity MEDIUM (not high) because the default threat model for a
+  CLI tool is a trusted local user. Would be HIGH when the CLI is
+  run in CI or wrapped in automation that feeds external data.
+  The scanner should emit MEDIUM by default but note in the finding
+  description that severity escalates to HIGH in automation contexts.
+
+  defense_present is empty: no guardrail, no allowlist of question
+  patterns, no Pydantic-style validation, no Bedrock/Lakera/NeMo.
+
+  Stage 1 enumeration target:
+    - argparse.ArgumentParser with .parse_args() → args.<name> used
+      in f-string or concat to prompt
+    - click.command / click.argument / click.option → flows to prompt
+    - typer.Typer app commands → flows to prompt
+    - sys.argv direct indexing → flows to prompt
+    - input() / sys.stdin.read() → flows to prompt (covered by pi_020)
+  Stage 3 LLM triage: consider CLI context for severity (CI pipeline
+  = higher, interactive = lower).
+
+  Part of the tail source_type coverage (directional-only, target 8
+  fixtures for direct_cli). Add more variants in Phase B: typer,
+  click, direct sys.argv, stdin-only, mixed arg+stdin.

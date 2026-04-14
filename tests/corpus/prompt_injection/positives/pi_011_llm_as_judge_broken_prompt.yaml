@@ -1,0 +1,79 @@
+fixture_id: pi_011
+category: prompt_injection
+source_type: direct_http
+vuln_subtype: IIV-2
+verdict: positive
+expected_check_id: code-prompt-injection-risk
+expected_severity: high
+defense_present:
+  - name: llm_as_judge_broken_prompt
+    recognized: false
+    description: "Secondary LLM call, but the judge prompt is 'is this text bad? yes/no' — no variant enumeration, no structured output, no rejection bias. Misses Unicode, homoglyphs, encoding, paraphrase, role-play attacks."
+defense_score: 0
+adversarial_pair: pi_n04
+source: synthetic
+source_url: ""
+source_commit: ""
+source_lines: ""
+license: synthetic
+labeled_by: claude+kkmookhey
+labeled_at: 2026-04-12
+reasoning: |
+  Adversarial pair to pi_n04. Same Flask + openai + judge pre-call
+  structure — a casual reader would see "LLM-as-judge is present" and
+  conclude the app is defended. It isn't. The judge prompt is broken
+  in multiple ways:
+
+    1. No variant enumeration. The prompt asks "is this text bad?"
+       with no guidance on what "bad" means. The judge LLM will
+       classify overt hostility and profanity but miss:
+         - Polite prompt injection ("please ignore your previous...")
+         - Unicode / homoglyph obfuscation
+         - Base64-encoded payloads
+         - Language switching
+         - Role-play framings ("pretend you are...")
+         - Semantic paraphrase
+
+    2. No structured output. The judge returns free text that's
+       searched for "yes". A judge that responds "No, this text is
+       fine; however, it does contain some concerning language..."
+       passes the check because "yes" does not appear, even though
+       the substance of the answer is mixed.
+
+    3. No rejection bias. The prompt has no instruction to err on
+       the side of rejection. The model's default bias is to be
+       helpful (not to reject), so it under-rejects.
+
+    4. Naive string search on the response ("yes" in lower). A judge
+       response of "yes, this looks safe" bypasses the check. A
+       response in a language other than English bypasses too.
+
+  Stage 3 LLM triage MUST classify this judge prompt as broken and
+  emit a TP despite the presence of a judge call. The defense is
+  recorded in defense_present with `recognized: false` and a
+  description that enumerates the specific problems. The remediation
+  message should say: "You have an LLM-as-judge call, but the prompt
+  is inadequate. Replace with a judge prompt that (a) enumerates
+  attack variants, (b) returns structured output, (c) explicitly
+  biases toward rejection, (d) is parsed via JSON, not substring
+  matching. See pi_n04 for a correct example."
+
+  This fixture is the canonical "defense present but broken" TP. It
+  is the hardest fixture in Phase A because catching it requires
+  Stage 3 to READ and JUDGE the judge's own prompt. A deterministic
+  Stage 1 rule cannot distinguish pi_n04 from pi_011 — they differ
+  only in the string content of the judge prompt. This is where the
+  LLM triage earns its cost.
+
+  IMPORTANT NUANCE: the scanner should not demand a judge prompt be
+  identical to pi_n04's. Many valid judge prompts exist. The Stage 3
+  triage should classify on the CRITERIA list (variant enumeration,
+  structured output, rejection bias, JSON parsing), not on surface
+  similarity. Future corpus additions will include correct judges
+  with very different prompt texts to prevent Stage 3 from
+  memorizing one specific correct example.
+
+  Adversarial pair pi_n04: same code shape with a correct judge prompt.
+  The only difference is ~15 lines of judge prompt text. That is the
+  entire delta between "properly defended" and "vulnerable despite
+  appearing defended."

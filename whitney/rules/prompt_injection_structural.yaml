@@ -1,0 +1,396 @@
+rules:
+  # ===========================================================================
+  # Whitney prompt-injection structural ruleset.
+  #
+  # Philosophy: these rules target code shapes where the *structure*
+  # of the code is the vulnerability signal, independent of data flow
+  # or presence-of-dangerous-sink. The canonical examples:
+  #
+  #   1. CrewAI `Task(..., context=[upstream_task], ...)` — the
+  #      agent-to-agent context handoff is a code shape. Taint mode
+  #      cannot trace through `crew.kickoff()` because the flow goes
+  #      through runtime agent reasoning loops. The shape itself is
+  #      the signal.
+  #
+  #   2. LangChain `LLMChain(prompt=..., llm=...)` paired with
+  #      `.run(variable)` — the framework-idiom shape. Taint mode
+  #      misses this when the variable is a function parameter that
+  #      ultimately comes from a caller, because Semgrep OSS taint
+  #      is intraprocedural. The LangChain idiom is itself a
+  #      well-known prompt injection surface (see DVLA, P2SQL paper,
+  #      Broken_LLM_Integration_App graduated-difficulty levels).
+  #
+  #   3. LangChain `WebBaseLoader(url)` present in a file that also
+  #      constructs an LLM chain — the pattern is "fetch arbitrary
+  #      web content, feed to LLM". The taint rule's source pattern
+  #      `WebBaseLoader(...).load()` matches only the single-expression
+  #      form; the multi-statement form (`loader = WebBaseLoader(...);
+  #      docs = loader.load()`) slips through because Semgrep doesn't
+  #      re-resolve the variable assignment as a source.
+  #
+  # Pattern rules (AST) are the right tool because we're asking
+  # "does this code shape exist?" not "does this specific variable
+  # flow from here to there?"
+  #
+  # SCOPE NOTE: these rules intentionally overlap with the taint rule
+  # in `prompt_injection_taint.yaml`. The overlap is belt-and-suspenders
+  # by design — if taint fails (due to function parameters, dynamic
+  # dispatch, or Semgrep OSS intraprocedural limits), the structural
+  # rule still fires. Semgrep's finding deduplication handles the
+  # overlap at report time.
+  #
+  # KNOWN TRANSIENT: these rules will produce additional FPs on fixtures
+  # that have the vulnerable shape AND a guard-style defense. Turn 5's
+  # missing-defense ruleset is designed to suppress those via the
+  # inverse question "is a recognised guardrail called in the same
+  # function?" — see prompt_injection_missing_defense.yaml (not yet built).
+  # ===========================================================================
+
+  # --- CrewAI Task with agent-to-agent context handoff ---
+  # Pattern matches Task(...) with a context=[...] keyword argument,
+  # regardless of line layout (AST pattern is whitespace-insensitive).
+  # Turn 5: function-level suppression for recognised guardrails.
+  - id: code-prompt-injection-risk-crewai-task-context
+    patterns:
+      - pattern: Task(..., context=[...], ...)
+      - pattern-not-inside: |
+          def $F(...):
+              ...
+              $BEDROCK.apply_guardrail(...)
+              ...
+      - pattern-not-inside: |
+          async def $F(...):
+              ...
+              $BEDROCK.apply_guardrail(...)
+              ...
+      - pattern-not-inside: |
+          def $F(...):
+              ...
+              lakera_flagged(...)
+              ...
+      - pattern-not-inside: |
+          async def $F(...):
+              ...
+              lakera_flagged(...)
+              ...
+      - pattern-not-inside: |
+          def $F(...):
+              ...
+              dk_request_filter(...)
+              ...
+      - pattern-not-inside: |
+          async def $F(...):
+              ...
+              dk_request_filter(...)
+              ...
+    message: >
+      CrewAI Task with agent-to-agent context handoff. Upstream agent
+      output flows into this agent's prompt via the context= parameter,
+      creating an indirect prompt injection chain. If any upstream
+      agent's tools return attacker-controlled content (web search,
+      RAG retrieval, file reads), the injection propagates through
+      the task graph without any static data flow visible to Semgrep.
+    severity: ERROR
+    languages: [python]
+    metadata:
+      check_id: code-prompt-injection-risk
+      whitney_severity: critical
+      cwe: ["CWE-94"]
+      owasp: ["LLM01:2025"]
+      owasp_agentic: ["AA05:2026", "AA06:2026"]
+      confidence: HIGH
+      category: security
+      technology: [crewai]
+      references:
+        - "https://arxiv.org/abs/2403.02691"
+      remediation: >
+        Apply a content safety filter on upstream agent outputs before
+        they flow into the next agent's context. In CrewAI, this means
+        wrapping task outputs in a post-processing step that calls a
+        recognised guardrail (Bedrock Guardrails, Lakera, NeMo) before
+        the context hands off to the next task. Do not trust upstream
+        agent outputs as pre-sanitized.
+
+  # --- LangChain LLMChain invocation (framework idiom) ---
+  # Matches the canonical LangChain shape where an LLMChain is
+  # constructed (typically with a PromptTemplate) and later invoked
+  # via .run() or .invoke(). Catches function-parameter sources that
+  # intraprocedural taint misses.
+  # Turn 5: function-level suppression for recognised guardrails.
+  - id: code-prompt-injection-risk-langchain-llmchain-idiom
+    patterns:
+      - pattern-either:
+          - pattern: |
+              $CHAIN = LLMChain(...)
+              ...
+              $CHAIN.run(...)
+          - pattern: |
+              $CHAIN = LLMChain(...)
+              ...
+              $CHAIN.invoke(...)
+          - pattern: |
+              $CHAIN = LLMChain(...)
+              ...
+              $CHAIN.ainvoke(...)
+          - pattern: |
+              $CHAIN = LLMChain(...)
+              ...
+              $CHAIN.arun(...)
+          - pattern: LLMChain(...).run(...)
+          - pattern: LLMChain(...).invoke(...)
+      - pattern-not-inside: |
+          def $F(...):
+              ...
+              $BEDROCK.apply_guardrail(...)
+              ...
+      - pattern-not-inside: |
+          async def $F(...):
+              ...
+              $BEDROCK.apply_guardrail(...)
+              ...
+      - pattern-not-inside: |
+          def $F(...):
+              ...
+              lakera_flagged(...)
+              ...
+      - pattern-not-inside: |
+          async def $F(...):
+              ...
+              lakera_flagged(...)
+              ...
+      - pattern-not-inside: |
+          def $F(...):
+              ...
+              dk_request_filter(...)
+              ...
+      - pattern-not-inside: |
+          async def $F(...):
+              ...
+              dk_request_filter(...)
+              ...
+    message: >
+      LangChain LLMChain construction followed by runtime invocation.
+      This is the canonical LangChain prompt injection surface:
+      a PromptTemplate with input_variables, wrapped in LLMChain,
+      invoked with user-controlled input. The framework idiom is a
+      presence-based signal — if LLMChain is being used at all, the
+      input flowing into .run()/.invoke() is almost always user-derived.
+      Intraprocedural taint alone misses this when the input arrives
+      via function parameter from a caller.
+    severity: WARNING
+    languages: [python]
+    metadata:
+      check_id: code-prompt-injection-risk
+      whitney_severity: high
+      cwe: ["CWE-94"]
+      owasp: ["LLM01:2025"]
+      owasp_agentic: ["AA01:2026"]
+      confidence: MEDIUM
+      category: security
+      technology: [langchain]
+      remediation: >
+        Apply a recognised guardrail on the input variable BEFORE
+        constructing or invoking the LLMChain. Bedrock Guardrails,
+        NeMo runnable composition (prompt | (rails | model)), Lakera
+        Guard, or a correct LLM-as-judge pre-call are the validated
+        defences. Do not rely on PromptTemplate's input_variables
+        for safety — they are substitution placeholders, not
+        validation.
+
+  # --- LangChain WebBaseLoader + LLM chain in same function ---
+  # Matches the "summarize this URL" / "fetch and answer" pattern
+  # where a WebBaseLoader (or similar document loader) is constructed
+  # and the loaded content flows into an LLM chain invocation. Catches
+  # the multi-statement form (loader = ...; docs = loader.load()) that
+  # the taint rule's single-expression source pattern misses.
+  # --- File/document extractor + LLM call in same function ---
+  # Matches "extract text from user-uploaded file, then call LLM"
+  # patterns. Semgrep taint can't trace through generator expressions
+  # like `"\n".join(p.extract_text() or "" for p in reader.pages)`,
+  # so this structural rule catches the pattern at the function level.
+  - id: code-prompt-injection-risk-file-extractor-to-llm
+    patterns:
+      - pattern-either:
+          - pattern: |
+              $READER = PdfReader(...)
+              ...
+              $CLIENT.chat.completions.create(...)
+          - pattern: |
+              $READER = PdfReader(...)
+              ...
+              $CLIENT.messages.create(...)
+          - pattern: |
+              $READER = PdfReader(...)
+              ...
+              $CHAIN.invoke(...)
+          - pattern: |
+              $READER = PdfReader(...)
+              ...
+              $CHAIN.run(...)
+          - pattern: |
+              $DOCS = PyPDFLoader(...).load()
+              ...
+              $CHAIN.invoke(...)
+          - pattern: |
+              $DOCS = PyPDFLoader(...).load()
+              ...
+              $CHAIN.run(...)
+          - pattern: |
+              $DOCS = UnstructuredFileLoader(...).load()
+              ...
+              $CHAIN.invoke(...)
+          - pattern: |
+              $DOCS = UnstructuredFileLoader(...).load()
+              ...
+              $CHAIN.run(...)
+      # Guardrail suppression
+      - pattern-not-inside: |
+          def $F(...):
+              ...
+              $BEDROCK.apply_guardrail(...)
+              ...
+      - pattern-not-inside: |
+          async def $F(...):
+              ...
+              $BEDROCK.apply_guardrail(...)
+              ...
+      - pattern-not-inside: |
+          def $F(...):
+              ...
+              lakera_flagged(...)
+              ...
+      - pattern-not-inside: |
+          async def $F(...):
+              ...
+              lakera_flagged(...)
+              ...
+      - pattern-not-inside: |
+          def $F(...):
+              ...
+              dk_request_filter(...)
+              ...
+      - pattern-not-inside: |
+          async def $F(...):
+              ...
+              dk_request_filter(...)
+              ...
+    message: >
+      File-upload document extractor paired with LLM invocation in
+      the same function. Extracted text from user-uploaded files
+      (PDF/DOCX/HTML) can contain prompt-injection payloads (hidden
+      text, metadata, white-on-white, image OCR) that flow into the
+      LLM prompt without any sanitization between the extractor and
+      the sink. Semgrep taint cannot trace through generator
+      expressions like `"\n".join(p.extract_text() for p in pages)`,
+      so this structural rule catches the function-level pattern.
+    severity: ERROR
+    languages: [python]
+    metadata:
+      check_id: code-prompt-injection-risk
+      whitney_severity: critical
+      cwe: ["CWE-94"]
+      owasp: ["LLM01:2025"]
+      owasp_agentic: ["AA01:2026"]
+      confidence: MEDIUM
+      category: security
+      technology: [pypdf, pdfplumber, langchain, openai, anthropic]
+      remediation: >
+        Apply a content-safety filter on extracted document text before
+        interpolating into the prompt. Do not assume uploaded files are
+        safe — attacker-controlled content can override system prompts.
+        Consider structural separation: pass document text as a typed
+        tool-call argument rather than as a raw prompt substring.
+
+  - id: code-prompt-injection-risk-langchain-web-loader-to-chain
+    patterns:
+      - pattern-either:
+          - pattern: |
+              $LOADER = WebBaseLoader(...)
+              ...
+              $CHAIN.run(...)
+          - pattern: |
+              $LOADER = WebBaseLoader(...)
+              ...
+              $CHAIN.invoke(...)
+          - pattern: |
+              $DOCS = WebBaseLoader(...).load()
+              ...
+              $CHAIN.run(...)
+          - pattern: |
+              $DOCS = WebBaseLoader(...).load()
+              ...
+              $CHAIN.invoke(...)
+          - pattern: |
+              $LOADER = SeleniumURLLoader(...)
+              ...
+              $CHAIN.run(...)
+          - pattern: |
+              $LOADER = PlaywrightURLLoader(...)
+              ...
+              $CHAIN.run(...)
+          - pattern: |
+              $LOADER = AsyncHtmlLoader(...)
+              ...
+              $CHAIN.run(...)
+          - pattern: |
+              $LOADER = UnstructuredURLLoader(...)
+              ...
+              $CHAIN.run(...)
+      # Turn 5: function-level suppression for recognised guardrails.
+      - pattern-not-inside: |
+          def $F(...):
+              ...
+              $BEDROCK.apply_guardrail(...)
+              ...
+      - pattern-not-inside: |
+          async def $F(...):
+              ...
+              $BEDROCK.apply_guardrail(...)
+              ...
+      - pattern-not-inside: |
+          def $F(...):
+              ...
+              lakera_flagged(...)
+              ...
+      - pattern-not-inside: |
+          async def $F(...):
+              ...
+              lakera_flagged(...)
+              ...
+      - pattern-not-inside: |
+          def $F(...):
+              ...
+              dk_request_filter(...)
+              ...
+      - pattern-not-inside: |
+          async def $F(...):
+              ...
+              dk_request_filter(...)
+              ...
+    message: >
+      LangChain web content loader paired with LLM chain invocation in
+      the same function. Fetched page content is attacker-controlled
+      (SEO poisoning, compromised sites, open-text CMS) and flows
+      directly into the LLM prompt via the chain. This is the
+      canonical "summarize this URL" indirect prompt injection vector.
+    severity: ERROR
+    languages: [python]
+    metadata:
+      check_id: code-prompt-injection-risk
+      whitney_severity: critical
+      cwe: ["CWE-94"]
+      owasp: ["LLM01:2025"]
+      owasp_agentic: ["AA01:2026"]
+      confidence: MEDIUM
+      category: security
+      technology: [langchain]
+      references:
+        - "https://arxiv.org/abs/2302.12173"
+      remediation: >
+        Apply a content safety filter / LLM-as-judge on loaded document
+        content before interpolating into the prompt. Do not assume
+        fetched pages are safe — attacker-controlled content can
+        override system instructions via indirect prompt injection.
+        Consider a dual-LLM pattern where the privileged LLM never
+        sees untrusted loaded content directly.
+

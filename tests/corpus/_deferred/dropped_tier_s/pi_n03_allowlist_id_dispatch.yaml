@@ -1,0 +1,54 @@
+fixture_id: pi_n03
+category: prompt_injection
+source_type: direct_http
+verdict: negative
+expected_check_id: code-prompt-injection-risk
+expected_severity: high
+defense_present:
+  - name: allowlist_id_dispatch
+    tier: S
+    score: 10
+    description: "section_id checked against fixed HANDBOOK dict; content fetched by ID from trusted internal store; no user-controlled string ever reaches the prompt"
+defense_score: 10
+adversarial_pair: ""
+source: synthetic
+source_url: ""
+source_commit: ""
+source_lines: ""
+license: synthetic
+labeled_by: claude+kkmookhey
+labeled_at: 2026-04-12
+reasoning: |
+  The strongest possible defense for prompt injection: the attack surface
+  is closed by construction. The user supplies an ID, the server validates
+  the ID against a fixed allowlist (HANDBOOK dict keys), and the content
+  fetched by that ID comes from a trusted internal store. There is no
+  user-controlled string that reaches the prompt — the only user influence
+  is "which trusted text" not "what text."
+
+  This is Tier S (allowlist enum / ID dispatch), score 10, full credit.
+  The scanner must suppress any finding here regardless of severity.
+  Even an agentic context with tool calls would be safe with this pattern,
+  because there is nothing for the attacker to inject.
+
+  Note that the structural separation comes from BOTH:
+    1. The ID allowlist check (`if section_id not in HANDBOOK: abort(404)`)
+    2. The dispatch through the HANDBOOK dict (the content is keyed,
+       not interpolated)
+
+  Either alone is necessary but not sufficient. The combination is what
+  makes this Tier S. A scanner that recognizes only one of the two will
+  miss-classify either way.
+
+  Why this matters: this is the pattern Whitney should *recommend* in
+  remediation guidance. When a developer asks "how do I make my LLM app
+  immune to prompt injection?", the answer is "stop concatenating
+  user-controlled strings into prompts; dispatch to trusted content by
+  ID instead." This fixture is the canonical example of that pattern.
+
+  Stage 1 enumeration WILL emit this as a candidate (Flask + openai +
+  f-string in user content). Stage 2 data flow must recognize that the
+  f-string only interpolates `trusted_text` which comes from HANDBOOK
+  (a module-level constant), not from request.json. Stage 3 LLM triage
+  confirms "user has no influence over prompt content; only over
+  selection key, which is checked against an allowlist."

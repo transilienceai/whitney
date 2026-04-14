@@ -1,0 +1,15 @@
+# Whitney corpus license allowlist
+# Only fixtures whose YAML sidecar `license:` field matches one of these
+# values are accepted by test_licenses.py. GPL/AGPL/LGPL/SSPL/proprietary
+# are rejected — the corpus ships inside the package and cannot be
+# license-contaminated.
+
+MIT
+Apache-2.0
+BSD-2-Clause
+BSD-3-Clause
+ISC
+0BSD
+Unlicense
+CC0-1.0
+synthetic

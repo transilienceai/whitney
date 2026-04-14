@@ -1,0 +1,64 @@
+fixture_id: pi_022
+category: prompt_injection
+source_type: direct_voice
+vuln_subtype: DPI-1
+verdict: positive
+expected_check_id: code-prompt-injection-risk
+expected_severity: high
+defense_present: []
+adversarial_pair: ""
+source: synthetic
+source_url: ""
+source_commit: ""
+source_lines: ""
+license: synthetic
+labeled_by: claude+kkmookhey
+labeled_at: 2026-04-12
+reasoning: |
+  Direct-voice prompt injection via Twilio SpeechResult webhook. The
+  untrusted source is request.values['SpeechResult'] — Twilio's
+  server-side speech-to-text output delivered as form data to the
+  webhook. The text flows into an f-string prompt and the LLM's
+  response is spoken back to the caller via TwiML <Say>.
+
+  SOURCE_TYPE: direct_voice. Complementary to pi_021 (Whisper-side
+  transcription). pi_021 transcribes server-side with OpenAI; pi_022
+  receives pre-transcribed text from a telephony provider (Twilio).
+  The scanner must recognize BOTH shapes:
+    - "openai.audio.transcriptions.create → .text → prompt" (pi_021)
+    - "Twilio webhook request.values['SpeechResult'] → prompt" (pi_022)
+    - Vonage voice API equivalents
+    - AWS Connect SDK transcript events
+    - Microsoft Teams / Graph call transcription APIs
+    - Dialogflow CX agents webhook fulfillment with queryText
+    - Amazon Lex intent slots with speech input
+  All share source_type direct_voice but have distinct framework
+  patterns.
+
+  VULN_SUBTYPE: DPI-1 (F-string injection).
+
+  Severity HIGH. Twilio voice apps are commonly deployed for customer
+  support, IVR, appointment booking, etc. — high-value targets where
+  a successful injection can extract PII, reroute calls, or trigger
+  unintended tool actions.
+
+  A particularly devious attack on this shape: the caller speaks an
+  injection instruction that makes the LLM output a TwiML-like string
+  which is then passed to Say. If the output contains <Gather> or
+  <Redirect> XML fragments, Twilio may execute them (depending on
+  how the response is parsed). This turns voice prompt injection
+  into voice routing control.
+
+  defense_present is empty. No guardrail on SpeechResult, no content
+  filter, no Twilio signature validation on the webhook (a separate
+  auth issue), no LLM-as-judge.
+
+  Stage 1 enumeration target: twilio webhook handlers with
+  request.values['SpeechResult'] / 'TranscriptionText', plus the
+  other voice provider shapes listed above. The `twilio` package
+  import is a useful discriminator for Twilio-specific rules.
+
+  Part of direct_voice tail coverage. Second of target 8 fixtures.
+  Completes the "two variants of direct_voice" minimum. Phase B
+  adds the remaining 6 with Vonage, Dialogflow, Lex, Connect,
+  Deepgram streaming, and custom IVR shapes.

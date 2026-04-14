@@ -1,0 +1,73 @@
+fixture_id: pi_017
+category: prompt_injection
+source_type: indirect_memory_stored
+vuln_subtype: IPI-1
+verdict: positive
+expected_check_id: code-prompt-injection-risk
+expected_severity: high
+defense_present: []
+adversarial_pair: ""
+source: synthetic
+source_url: ""
+source_commit: ""
+source_lines: ""
+license: synthetic
+labeled_by: claude+kkmookhey
+labeled_at: 2026-04-12
+reasoning: |
+  Indirect prompt injection via Mem0 memory store replay. The untrusted
+  source is the cumulative state of the memory store, which is externally
+  writeable across sessions. Two attack scenarios:
+
+    1. Same-user stored injection: in session 1, the user's question
+       is compromised by indirect injection (e.g., they ask the LLM to
+       summarize a web page containing an injection, and the LLM
+       complies and stores the summary in memory). In session 2, the
+       user asks an unrelated question, but memory.search returns the
+       compromised memory as "relevant context" and re-fires the
+       injection. The user has no idea their earlier session poisoned
+       their future sessions.
+
+    2. Cross-tenant memory leak: Mem0 scopes memory by user_id, but
+       an operator misconfiguration (shared user_id, default-value
+       fallback, or per-session allocation without authorization check)
+       causes user A's stored memories to surface in user B's queries.
+       User B's session is then shaped by content user A authored.
+
+  Distinct from IPI-1 in a RAG context (pi_002) because:
+    - RAG documents are curated by operators; memory is authored by
+      the user themselves (or by the LLM's previous outputs).
+    - RAG is typically refreshed on a schedule; memory persists
+      session-to-session and grows with use.
+    - Memory attacks chain across time — a single compromised turn
+      can influence every future interaction.
+
+  defense_present is empty. No guardrail on memory_context, no content
+  sanitizer on stored memories at write time, no per-retrieval judge
+  over returned memories, no structural separation (memory interpolated
+  directly into prompt instead of passed as a typed argument).
+
+  Severity HIGH. Not critical because:
+    - The attack requires initial compromise of user input (turn 1 or
+      earlier) — not a single-shot attacker-anywhere attack.
+    - The replay is scoped to the user_id (assuming Mem0 is configured
+      correctly) — no direct cross-user blast radius unless there's
+      also a configuration bug.
+    - Mitigation is possible via memory clear, though users rarely do it.
+
+  Stage 1 enumeration target: pattern is "memory-store SDK search/get
+  method call → interpolation into LLM prompt." Specifically:
+    - mem0.Memory.search / .get_all / .get
+    - zep_python.ZepClient.get_memory / .search_memory
+    - langchain ConversationBufferMemory.buffer / .chat_memory.messages
+    - langchain_core.chat_history.BaseChatMessageHistory.messages
+    - RedisChatMessageHistory.messages
+    - DynamoDBChatMessageHistory.messages
+  When the retrieved memory text flows into a user/system message
+  content, it's a candidate. Stage 2 data flow confirms the source→sink
+  path. Stage 3 LLM triage confirms no guardrail is interposed.
+
+  Related tail source_type to cover in a follow-up fixture: same Mem0
+  pattern but with multi-tenant memory misconfiguration (explicit
+  cross-tenant leak). That variant gets severity CRITICAL because the
+  blast radius is cross-user.

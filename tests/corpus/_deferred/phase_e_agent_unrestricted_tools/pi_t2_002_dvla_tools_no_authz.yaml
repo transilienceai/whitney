@@ -1,0 +1,79 @@
+fixture_id: pi_t2_002
+category: prompt_injection
+source_type: indirect_tool_response
+vuln_subtype: IIV-3
+verdict: positive
+expected_check_id: code-prompt-injection-risk
+expected_severity: high
+defense_present: []
+adversarial_pair: ""
+source: github
+source_url: https://github.com/ReversecLabs/damn-vulnerable-llm-agent/blob/main/tools.py
+source_commit: c0cf9a14adad76e9d6a53c41741f625334bd9971
+source_lines: L1-L46
+license: Apache-2.0
+labeled_by: claude+kkmookhey
+labeled_at: 2026-04-12
+reasoning: |
+  Tier 2 verbatim fixture. This is tools.py from the same repo as
+  pi_t2_001. It's the tool-layer companion to the main.py prompt
+  injection surface.
+
+  WHY THIS IS IN THE PROMPT_INJECTION CORPUS (not elsewhere): the
+  vulnerability here is *not* SQL injection (that lives in
+  transaction_db.py and belongs in a future llm_output_to_sink
+  corpus). The vulnerability here is that the tool `get_transactions`
+  accepts any userId as argument with no out-of-band authorization
+  check — the LLM chooses the userId, and the tool trusts it. This
+  makes the tool layer a WEAK AMPLIFIER for prompt injection: once
+  an attacker compromises the agent's reasoning via chat (pi_t2_001),
+  the tool layer offers no second line of defense.
+
+  SOURCE_TYPE classification: `indirect_tool_response`. Borderline
+  label choice. The vulnerable shape is "tool that's exposed to an
+  LLM agent and whose argument controls a cross-user authorization
+  decision." The tool itself doesn't receive untrusted content from
+  the internet; it receives an argument from an LLM that may have
+  been compromised via a different untrusted channel. I'm labeling
+  it `indirect_tool_response` because the tool is PART OF the
+  injection chain — the fixture exists to teach the scanner that
+  tool-layer permissiveness amplifies direct injection risk.
+
+  VULN_SUBTYPE classification: `IIV-3` (Missing role separation).
+  The tool does not separate "LLM-chosen argument" from "authorization
+  context." It should take the userId from session state (the
+  authenticated user), not from the LLM. The system_message in
+  main.py tries to enforce this but that's not a code-level defense.
+
+  SEVERITY high (not critical). The tool by itself doesn't execute
+  the injection — pi_t2_001 is where that happens. This fixture is
+  a contributing factor. Critical severity is reserved for the
+  primary injection surface.
+
+  defense_present is empty. No @require_authz decorator, no
+  `if userId != session.user_id: raise PermissionError`, no validation,
+  no allowlist, nothing. The description on the Tool object says
+  "Returns the transactions associated to the userId provided" — it's
+  literally documented as "whatever userId you pass gets queried."
+
+  Attribution: file is verbatim from the source commit; no trimming.
+  License Apache-2.0, provenance fields populated.
+
+  Stage 1 enumeration target: "LangChain Tool(name=, func=, description=)
+  with func that takes a non-session-derived argument of type str/int
+  AND the argument flows into a DB query or external call." This is a
+  hard pattern — most tools legitimately take arguments from the LLM
+  (that's the whole point of tool calling). The scanner needs Stage 3
+  LLM triage to judge "is this argument an authorization-relevant
+  identifier that should be session-bound?" — not a determination
+  Stage 1/2 can make alone.
+
+  This fixture's primary job is to teach Stage 3 that authorization-
+  relevant arguments (userId, accountId, tenantId, organizationId, etc.)
+  in LLM-exposed tools are HIGH severity when they're not session-bound.
+  It's the hardest class of prompt-injection-adjacent fixture in Phase A.
+
+  NO adversarial pair — a "fixed" version of this tool would require
+  a non-trivial refactor (passing session context through to the tool,
+  re-architecting the agent to scope tools per user). We'd need to
+  synthesize that as a separate fixture; deferring to a future turn.

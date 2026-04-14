@@ -1,0 +1,32 @@
+fixture_id: cc_n01
+category: colocated_credentials
+verdict: negative
+expected_check_id: code-ai-api-key-exposed
+expected_severity: critical
+source: synthetic
+source_url: ""
+source_commit: ""
+source_lines: ""
+license: synthetic
+labeled_by: claude+kkmookhey
+labeled_at: 2026-04-12
+adversarial_pair: cc_001
+reasoning: |
+  Hard negative. The string TEST_FIXTURE_HASH matches the OpenAI sk-proj-*
+  regex exactly, but the file imports only `hashlib`, has no LLM SDK
+  import, no LLM call, and the variable is used as a salt for SHA-256
+  hashing. The scanner must NOT flag this.
+
+  Co-location with an LLM call is the distinguishing signal — without it,
+  a key-shaped string is just a string. A v1 scanner that flags any
+  sk-proj-* match will produce a false positive on this fixture.
+
+  Expected v2 pipeline behavior:
+    Stage 1: emit as candidate (recall-first regex match) — OK
+    Stage 2: no LLM SDK in reachability scope → demote to informational
+    Stage 3: LLM triage confirms "no LLM context, not a credential leak"
+    Final:   suppressed from default output
+
+  This fixture is the canonical test for the "co-located" rule that
+  separates v2 from v1. If the scanner regresses on this, the whole
+  co-location architecture is broken.

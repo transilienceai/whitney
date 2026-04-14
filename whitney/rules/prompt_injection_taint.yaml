@@ -1,0 +1,558 @@
+rules:
+  # ===========================================================================
+  # Whitney prompt-injection taint rule — Semgrep OSS intra-file data flow.
+  #
+  # Philosophy: the vulnerability is a source→sink flow where untrusted
+  # input reaches an LLM invocation without passing through a recognised
+  # guardrail. Taint mode is the right tool because:
+  #
+  #   1. It natively handles variable assignment, f-string interpolation,
+  #      dict literal embedding, and string concatenation.
+  #   2. It natively handles sanitizer recognition — when a recognised
+  #      guardrail is called on the tainted data, the finding is suppressed
+  #      without any post-processing.
+  #   3. It naturally handles multiple functions in the same file — each
+  #      function's source→sink path is evaluated independently, so a
+  #      file with both vulnerable and defended handlers produces the
+  #      correct per-function verdicts.
+  #
+  # Scope: pattern rules for presence-alone-is-critical sinks (PAL chain,
+  # SQL chain, exec/eval of LLM output) live in prompt_injection_critical_sinks.yaml.
+  # Pattern rules for code-shape vulnerabilities (CrewAI context handoff,
+  # MCP call_tool, AgentExecutor+tools) live in prompt_injection_structural.yaml.
+  # This file handles only flow-based detection.
+  #
+  # Validated against shashankdeshpande/langchain-chatbot, Faridghr/Simple-RAG-Chatbot,
+  # lalanikarim/ai-chatbot — 8/8 real-world findings caught via intra-file taint,
+  # zero cross-file flows required (see tests/test_whitney/corpus/DIFFERENTIAL.md).
+  # ===========================================================================
+  - id: code-prompt-injection-risk
+    mode: taint
+    message: >
+      Untrusted input reaches an LLM call without passing through a
+      recognised guardrail. Apply AWS Bedrock Guardrails, NeMo Guardrails,
+      Lakera Guard, Azure AI Content Safety / Prompt Shields, OpenAI
+      Moderation, DeepKeep, or a correct LLM-as-Judge pre-call before
+      invocation. Weak defences (Pydantic regex validation, length caps,
+      keyword blocklists) are not recognised — they are bypassable via
+      Unicode, Cyrillic homoglyphs, Base64, language switching, paraphrase,
+      or token splitting.
+    severity: WARNING
+    languages: [python]
+    metadata:
+      check_id: code-prompt-injection-risk
+      whitney_severity: high
+      soc2_controls: ["CC6.1", "CC7.2"]
+      cwe: ["CWE-94"]
+      owasp: ["LLM01:2025"]
+      owasp_agentic: ["AA01:2026"]
+      confidence: MEDIUM
+      category: security
+      technology:
+        - openai
+        - anthropic
+        - langchain
+        - llamaindex
+        - streamlit
+        - flask
+        - fastapi
+        - django
+      references:
+        - "https://owasp.org/www-project-top-10-for-large-language-model-applications/"
+      remediation: >
+        Route untrusted input through a recognised guardrail before the
+        LLM call. See Whitney's recognised-guardrail list for supported
+        vendors. Weak defences do not count — replace them with a
+        dedicated AI firewall or LLM-as-judge.
+
+    # =========================================================================
+    # SOURCES — 15 source types from Whitney's taxonomy
+    # =========================================================================
+    pattern-sources:
+      # -------- direct_http: Flask / FastAPI / Django request objects ----
+      - pattern: request.json
+      - pattern: request.json[...]
+      - pattern: request.form
+      - pattern: request.form[...]
+      - pattern: request.form.get(...)
+      - pattern: request.args
+      - pattern: request.args[...]
+      - pattern: request.args.get(...)
+      - pattern: request.values
+      - pattern: request.values[...]
+      - pattern: request.values.get(...)
+      - pattern: request.data
+      - pattern: request.get_json(...)
+      - pattern: request.files
+      - pattern: request.files[...]
+      - pattern: flask.request.json[...]
+      - pattern: flask.request.form[...]
+      - pattern: flask.request.args[...]
+      # Django
+      - pattern: request.POST[...]
+      - pattern: request.POST.get(...)
+      - pattern: request.GET[...]
+      - pattern: request.GET.get(...)
+      - pattern: request.body
+      - pattern: request.FILES[...]
+
+      # -------- direct_http: Streamlit user input ------------------------
+      - pattern: st.chat_input(...)
+      - pattern: st.text_input(...)
+      - pattern: st.text_area(...)
+      - pattern: st.sidebar.chat_input(...)
+      - pattern: st.sidebar.text_input(...)
+      - pattern: st.sidebar.text_area(...)
+      - pattern: st.file_uploader(...)
+      - pattern: st.sidebar.file_uploader(...)
+
+      # -------- direct_cli: command-line arguments and stdin -------------
+      - pattern: sys.argv[...]
+      - pattern: sys.stdin.read(...)
+      - pattern: sys.stdin.readlines(...)
+      - pattern: input(...)
+      # argparse attribute access (any namespace)
+      - pattern: $ARGS.question
+      - pattern: $ARGS.query
+      - pattern: $ARGS.prompt
+      - pattern: $ARGS.message
+      - pattern: $ARGS.text
+      - pattern: $ARGS.input
+
+      # -------- direct_voice: speech-to-text ------------------------------
+      - pattern: $CLIENT.audio.transcriptions.create(...)
+      # Twilio SpeechResult (already matched by direct_http patterns above)
+      - pattern: request.values.get("SpeechResult")
+      - pattern: request.values.get("SpeechResult", ...)
+
+      # -------- indirect_web_fetch: HTTP fetches of arbitrary content ----
+      - pattern: requests.get(...).text
+      - pattern: requests.get(...).content
+      - pattern: httpx.get(...).text
+      - pattern: httpx.get(...).content
+      - pattern: urllib.request.urlopen(...).read()
+
+      # -------- indirect_file_upload: document extraction ----------------
+      - pattern: PyPDFLoader(...).load()
+      - pattern: UnstructuredFileLoader(...).load()
+      - pattern: UnstructuredPDFLoader(...).load()
+      - pattern: pdfplumber.open(...)
+      - pattern: PdfReader(...)
+      - pattern: $READER.pages
+
+      # -------- indirect_web_fetch: LangChain document loaders ------------
+      - pattern: WebBaseLoader(...).load()
+      - pattern: SeleniumURLLoader(...).load()
+      - pattern: PlaywrightURLLoader(...).load()
+      - pattern: AsyncHtmlLoader(...).load()
+      - pattern: BSHTMLLoader(...).load()
+      - pattern: UnstructuredURLLoader(...).load()
+
+      # -------- indirect_rag: vector store retrievals --------------------
+      # $RETRIEVER.invoke removed — see comment at end of sources block.
+      - pattern: $STORE.similarity_search(...)
+      - pattern: $STORE.similarity_search_with_score(...)
+      - pattern: $STORE.similarity_search_with_relevance_scores(...)
+      - pattern: $STORE.max_marginal_relevance_search(...)
+      - pattern: $STORE.as_retriever(...)
+      - pattern: $RETRIEVER.get_relevant_documents(...)
+
+      # -------- indirect_search: web search API results ------------------
+      - pattern: $TAVILY.search(...)
+      - pattern: $SERPAPI.search(...)
+      - pattern: $BRAVE.search(...)
+      - pattern: $GOOGLE.search(...)
+      - pattern: tavily_client.search(...)
+
+      # -------- indirect_mcp: MCP server tool responses ------------------
+      - pattern: $SESSION.call_tool(...)
+
+      # -------- indirect_db_stored: database query results ----------------
+      - pattern: $CURSOR.fetchone()
+      - pattern: $CURSOR.fetchall()
+      - pattern: $CONN.execute(...).fetchone()
+      - pattern: $CONN.execute(...).fetchall()
+
+      # -------- indirect_memory_stored: memory store retrievals ----------
+      - pattern: $MEMORY.search(...)
+      - pattern: $MEMORY.get(...)
+      - pattern: $MEMORY.get_all(...)
+      - pattern: $MEMORY.chat_memory.messages
+
+      # -------- indirect_email: inbound email bodies --------------------
+      # SES/SNS webhook payloads (nested dict access)
+      - pattern: $PAYLOAD["Records"]
+
+      # -------- cross_modal_image_ocr: OCR extraction --------------------
+      - pattern: pytesseract.image_to_string(...)
+      - pattern: $READER.readtext(...)
+      - pattern: $OCR.ocr(...)
+
+    # =========================================================================
+    # SANITIZERS — recognised guardrails
+    # =========================================================================
+    # Semgrep's taint mode marks any tainted value that passes through a
+    # sanitizer expression as no longer tainted. For guard-style functions
+    # that return a bool rather than transforming the input (e.g.
+    # lakera_flagged), we still treat the call as a sanitizer because the
+    # developer's intent to sanitize is unambiguous from the pattern.
+    # Phase D LLM triage (deferred) will eventually verify that the
+    # branching logic after the guard actually blocks the vulnerable path.
+    #
+    # Sanitizer model — **KNOWN LIMITATION documented honestly**:
+    #
+    # Semgrep OSS taint mode sanitizes the *return value* of a sanitizer
+    # call, not the *arguments* passed to it. This means guard-style
+    # defenses of the form:
+    #
+    #     if lakera_flagged(user_text):
+    #         reject()
+    #     prompt = f"...{user_text}..."           # user_text still tainted!
+    #     client.chat.completions.create(...)    # false positive here
+    #
+    # do NOT suppress findings in this rule. The `user_text` is still
+    # tainted at the sink even though the developer clearly intended
+    # to sanitize it via the guard call. Taint mode treats guards as
+    # "check and branch" rather than "transform and reassign", so the
+    # original variable stays tainted.
+    #
+    # Whitney's corpus has 5 such fixtures (pi_n01 Bedrock, pi_n02
+    # Lakera, pi_n04 LLM-judge, pi_t2_n01 DVLA+Bedrock, pi_t2_n03
+    # DeepKeep) that this rule will FP on. Suppression for guard-style
+    # defenses is deferred to:
+    #
+    #   - **Turn 5 (prompt_injection_missing_defense.yaml)** — pattern
+    #     rule that fires on "file has LLM sink but no recognised
+    #     guardrail call anywhere" with inverted semantics. This catches
+    #     the absence of a defense and lets the taint rule fire only
+    #     when the absence is confirmed.
+    #   - OR a narrow dataflow helper that runs AFTER Semgrep, re-reads
+    #     the file, and suppresses taint findings on files where a
+    #     recognised guardrail call is present. Same approach as the
+    #     previous Phase C alpha `dataflow.py`, reintroduced here only
+    #     for the guard-style case (not for anything else).
+    #
+    # Until turn 5, taint rule FPs on guard-style defended files are an
+    # accepted, documented limitation. Measured on the corpus: 5 FPs
+    # out of 9 negatives. See DIFFERENTIAL.md for the honest numbers.
+    #
+    # The patterns below DO handle wrapping-style sanitizers correctly
+    # (e.g. NeMo LLMRails wraps the model invocation itself, so the
+    # tainted flow is naturally intercepted at the sink).
+    pattern-sanitizers:
+      # --- AWS Bedrock Guardrails ---
+      # The apply_guardrail call is present but doesn't sanitize upstream
+      # variables. Turn 5 handles this via missing-defense pattern.
+      - pattern: $BEDROCK.apply_guardrail(...)
+      # --- Azure AI Content Safety / Prompt Shields ---
+      - pattern: $AZURE.detect_jailbreak(...)
+      - pattern: $AZURE.analyze_text(...)
+      # --- Lakera Guard ---
+      - pattern: requests.post("https://api.lakera.ai/v1/prompt_injection", ...)
+      - pattern: requests.post("https://api.lakera.ai/...", ...)
+      - pattern: $LAKERA.PromptInjection.detect(...)
+      - pattern: lakera_flagged(...)
+      - pattern: lakera_guard_blocks(...)
+      - pattern: lakera_client.check(...)
+      # --- NeMo Guardrails (wrapping-style — these DO sanitize correctly
+      #     because they wrap the model invocation, intercepting the flow
+      #     at the sink rather than guarding the source variable) ---
+      - pattern: load_nemo_guardrails(...)
+      - pattern: LLMRails(...)
+      - pattern: $RAILS.generate(...)
+      - pattern: $RAILS.generate_async(...)
+      # --- OpenAI Moderation API ---
+      - pattern: $CLIENT.moderations.create(...)
+      - pattern: openai.Moderation.create(...)
+      # --- DeepKeep AI firewall ---
+      - pattern: dk_request_filter(...)
+      - pattern: dk_response_filter(...)
+      # --- Prompt Armor, Rebuff, GuardrailsAI, LLM-Guard ---
+      - pattern: rebuff.detect_injection(...)
+      - pattern: llm_guard.scan_prompt(...)
+      - pattern: $GUARD.validate(...)
+      # --- Generic guardrail helper patterns ---
+      - pattern: guardrail_blocks(...)
+      - pattern: guardrail_flagged(...)
+      - pattern: is_prompt_injection(...)
+      - pattern: check_prompt_injection(...)
+      - pattern: check_injection(...)
+
+    # =========================================================================
+    # SINKS — LLM invocations
+    #
+    # Structured as a single `patterns:` block with:
+    #   - `pattern-either:` enumerating all sink shapes we care about
+    #   - `pattern-not-inside:` clauses suppressing sinks whose enclosing
+    #     function also contains a recognised guardrail call
+    #
+    # Turn 5: the pattern-not-inside clauses implement function-level
+    # suppression for guard-style defenses that Semgrep OSS taint-mode
+    # sanitizers can't handle natively (see sanitizer comment above).
+    # Only vendor guardrails in clean function scope are suppressed here:
+    #
+    #   - Bedrock Guardrails (apply_guardrail)
+    #   - Lakera Guard (lakera_flagged + requests.post to api.lakera.ai)
+    #   - DeepKeep AI firewall (dk_request_filter)
+    #
+    # NOT suppressed (deferred to Phase D LLM triage or later turns):
+    #   - LLM-as-judge (requires reading the judge prompt semantically
+    #     to distinguish correct from broken — pi_011 vs pi_t2_n04/n05)
+    #   - Streamlit module-level guarded blocks (requires non-function
+    #     scope pattern — pi_t2_n01)
+    #
+    # The suppression is function-level, not flow-level: any sink inside
+    # a function that ALSO calls a recognised guardrail is suppressed,
+    # regardless of whether the guardrail actually gates the sink. This
+    # matches Semgrep's `pattern-not-inside` semantics and is the same
+    # limitation as the planned missing-defense rule approach.
+    # =========================================================================
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              # -------- Raw provider SDK calls ----------------------------
+              - pattern: $CLIENT.chat.completions.create(...)
+              - pattern: $CLIENT.messages.create(...)
+              - pattern: $CLIENT.completions.create(...)
+              - pattern: openai.ChatCompletion.create(...)
+              - pattern: openai.Completion.create(...)
+              # -------- AWS Bedrock raw invoke ----------------------------
+              - pattern: $BEDROCK.invoke_model(...)
+              - pattern: $BEDROCK.invoke_model_with_response_stream(...)
+              - pattern: $BEDROCK.converse(...)
+              - pattern: $BEDROCK.converse_stream(...)
+              # -------- LangChain chain invocation ------------------------
+              - pattern: $CHAIN.invoke(...)
+              - pattern: $CHAIN.ainvoke(...)
+              - pattern: $CHAIN.run(...)
+              - pattern: $CHAIN.arun(...)
+              - pattern: $CHAIN.batch(...)
+              - pattern: $CHAIN.abatch(...)
+              - pattern: $CHAIN.stream(...)
+              - pattern: $CHAIN.astream(...)
+              # Dict-wrapped arg shapes (single-quoted to prevent YAML
+              # from parsing the dict literal as a mapping)
+              - pattern: '$CHAIN.invoke({"input": $X})'
+              - pattern: '$CHAIN.invoke({"input": $X, ...})'
+              - pattern: '$CHAIN.invoke({"question": $X})'
+              - pattern: '$CHAIN.invoke({"question": $X, ...})'
+              - pattern: '$CHAIN.run({"question": $X, ...})'
+              - pattern: '$CHAIN.run({"input": $X, ...})'
+              # -------- LangChain specific chain classes ------------------
+              - pattern: LLMChain(...).run(...)
+              - pattern: LLMChain(...).invoke(...)
+              - pattern: ConversationChain(...).invoke(...)
+              - pattern: ConversationChain(...).run(...)
+              - pattern: ConversationalRetrievalChain(...).invoke(...)
+              - pattern: RetrievalQA(...).invoke(...)
+              # -------- LangChain agents ----------------------------------
+              - pattern: AgentExecutor(...).invoke(...)
+              - pattern: AgentExecutor(...).run(...)
+              - pattern: $EXECUTOR.invoke(...)
+              - pattern: $EXECUTOR.run(...)
+              # Legacy LangChain v0 bare-call form — `chain({"question": q})`.
+              # Common in older tutorials and ConversationalRetrievalChain
+              # usage. Real example: Faridghr/RAG-ChatBot app.py.
+              - pattern: '$CHAIN({"question": $X})'
+              - pattern: '$CHAIN({"question": $X, ...})'
+              - pattern: '$CHAIN({"input": $X})'
+              - pattern: '$CHAIN({"input": $X, ...})'
+              - pattern: '$CHAIN({"query": $X})'
+              - pattern: '$CHAIN({"query": $X, ...})'
+              # Bare-call patterns — original set restored. The narrow
+              # arg-name approach was a Turn 5b attempt to prevent matching
+              # every 1-arg call. The residual FP class (`st.write(prompt)`,
+              # `session_state.messages.append(message)`) is handled via
+              # `pattern-not` exclusions below in the same `patterns:` block.
+              - pattern: $EXECUTOR(prompt, ...)
+              - pattern: $EXECUTOR(user_query, ...)
+              - pattern: $EXECUTOR(user_input, ...)
+              - pattern: $EXECUTOR(user_msg, ...)
+              - pattern: $EXECUTOR(user_message, ...)
+              - pattern: $EXECUTOR(user_text, ...)
+              - pattern: $EXECUTOR(question, ...)
+              - pattern: $EXECUTOR(query, ...)
+              - pattern: $EXECUTOR(message, ...)
+              - pattern: $EXECUTOR(user_prompt, ...)
+              - pattern: $EXECUTOR(input, ...)
+              # -------- LangChain SQL / PAL chains ------------------------
+              - pattern: create_sql_agent(...).invoke(...)
+              - pattern: create_sql_agent(...).run(...)
+              - pattern: create_db_chain(...).run(...)
+              - pattern: create_db_chain(...).invoke(...)
+              - pattern: $SQLCHAIN.run(...)
+              - pattern: $SQLCHAIN.invoke(...)
+              - pattern: run_pal_chain_native(...)
+              - pattern: PALChain(...).run(...)
+              # -------- LlamaIndex query engines --------------------------
+              - pattern: $INDEX.as_query_engine().query(...)
+              - pattern: $QUERY_ENGINE.query(...)
+              - pattern: $INDEX.query(...)
+              # -------- CrewAI / AutoGen / LangGraph ----------------------
+              - pattern: $CREW.kickoff(...)
+              - pattern: $CREW.kickoff_async(...)
+              - pattern: $AGENT.chat(...)
+              - pattern: $GRAPH.invoke(...)
+          # ==== Surgical sink exclusions (Turn 5c) =======================
+          # Exclude Streamlit UI calls, logging, and session-state storage
+          # that match `$EXECUTOR(prompt, ...)` etc. but are neither LLM
+          # sinks nor taint propagators of interest. Each `pattern-not`
+          # removes ONE specific false-sink shape without constraining
+          # the rest of the rule.
+          - pattern-not: st.write(...)
+          - pattern-not: st.markdown(...)
+          - pattern-not: st.text(...)
+          - pattern-not: st.code(...)
+          - pattern-not: st.caption(...)
+          - pattern-not: st.chat_message(...)
+          - pattern-not: st.info(...)
+          - pattern-not: st.warning(...)
+          - pattern-not: st.error(...)
+          - pattern-not: st.success(...)
+          - pattern-not: st.sidebar.write(...)
+          - pattern-not: st.sidebar.markdown(...)
+          - pattern-not: print(...)
+          - pattern-not: logger.info(...)
+          - pattern-not: logger.debug(...)
+          - pattern-not: logger.warning(...)
+          - pattern-not: logger.error(...)
+          - pattern-not: log.info(...)
+          - pattern-not: log.debug(...)
+          - pattern-not: $X.session_state.$Y.append(...)
+          - pattern-not: st.session_state[$K].append(...)
+          - pattern-not: st.session_state.$Y.append(...)
+          - pattern-not: $X.messages.append(...)
+          - pattern-not: $X.chunks.append(...)
+          # ==== Literal-string-argument exclusions (Turn 5c) =============
+          # Hardcoded string prompts inside dev main() harnesses — no
+          # taint source possible, developer typed the prompt by hand.
+          # Semgrep's `"..."` pattern is a string-literal match (verified
+          # via test_literal.yaml probe), not the ellipsis wildcard.
+          - pattern-not: $X.invoke("...")
+          - pattern-not: $X.ainvoke("...")
+          - pattern-not: $X.run("...")
+          - pattern-not: $X.arun("...")
+          - pattern-not: $X.batch("...")
+          - pattern-not: $X.query("...")
+          # Dev harness exclusion NOT added: `def main():` exclusion
+          # regresses pi_019 (argparse CLI fixture) which is a legitimate
+          # TP inside def main(). Cannot distinguish dev harness from real
+          # CLI entry point syntactically. The 2 residual FPs in
+          # example-app-langchain-rag (rag_chain.py:84 and vector_store.py:55)
+          # are accepted as the cost of this recall — both are inside
+          # `def main():` dev scaffolds with hardcoded test queries.
+          # ==== Function-level guardrail suppression (Turn 5) ============
+          # Bedrock Guardrails
+          - pattern-not-inside: |
+              def $F(...):
+                  ...
+                  $BEDROCK.apply_guardrail(...)
+                  ...
+          - pattern-not-inside: |
+              async def $F(...):
+                  ...
+                  $BEDROCK.apply_guardrail(...)
+                  ...
+          # Lakera Guard (helper call, statement form)
+          - pattern-not-inside: |
+              def $F(...):
+                  ...
+                  lakera_flagged(...)
+                  ...
+          - pattern-not-inside: |
+              async def $F(...):
+                  ...
+                  lakera_flagged(...)
+                  ...
+          # Lakera Guard (if-condition form — common guard pattern)
+          - pattern-not-inside: |
+              def $F(...):
+                  ...
+                  if lakera_flagged(...):
+                      ...
+          - pattern-not-inside: |
+              async def $F(...):
+                  ...
+                  if lakera_flagged(...):
+                      ...
+          # Lakera Guard (direct HTTP call form)
+          - pattern-not-inside: |
+              def $F(...):
+                  ...
+                  requests.post("https://api.lakera.ai/v1/prompt_injection", ...)
+                  ...
+          - pattern-not-inside: |
+              async def $F(...):
+                  ...
+                  requests.post("https://api.lakera.ai/v1/prompt_injection", ...)
+                  ...
+          # DeepKeep AI firewall
+          - pattern-not-inside: |
+              def $F(...):
+                  ...
+                  dk_request_filter(...)
+                  ...
+          - pattern-not-inside: |
+              async def $F(...):
+                  ...
+                  dk_request_filter(...)
+                  ...
+          # ==== Streamlit module-level scope (Turn 5b) ====
+          # Streamlit apps run at module level inside `if prompt := st.chat_input():`
+          # blocks, not inside `def` functions. The `def $F(...)` patterns
+          # above don't apply to this scope. These variants match the
+          # Streamlit walrus-assignment guard pattern and suppress sinks
+          # whose enclosing if-block also contains a guard call.
+          - pattern-not-inside: |
+              if $X := st.chat_input(...):
+                  ...
+                  if guardrail_blocks(...):
+                      ...
+          - pattern-not-inside: |
+              if $X := st.chat_input(...):
+                  ...
+                  guardrail_blocks(...)
+                  ...
+          - pattern-not-inside: |
+              if $X := st.chat_input(...):
+                  ...
+                  $BEDROCK.apply_guardrail(...)
+                  ...
+          - pattern-not-inside: |
+              if $X := st.chat_input(...):
+                  ...
+                  if lakera_flagged(...):
+                      ...
+          - pattern-not-inside: |
+              if $X := st.chat_input(...):
+                  ...
+                  lakera_flagged(...)
+                  ...
+          - pattern-not-inside: |
+              if $X := st.chat_input(...):
+                  ...
+                  dk_request_filter(...)
+                  ...
+          # ==== Robustness: if-condition form for all vendor guardrails
+          # (not yet exercised by the corpus but common in real-world code) ====
+          - pattern-not-inside: |
+              def $F(...):
+                  ...
+                  if $BEDROCK.apply_guardrail(...):
+                      ...
+          - pattern-not-inside: |
+              async def $F(...):
+                  ...
+                  if $BEDROCK.apply_guardrail(...):
+                      ...
+          - pattern-not-inside: |
+              def $F(...):
+                  ...
+                  if dk_request_filter(...):
+                      ...
+          - pattern-not-inside: |
+              async def $F(...):
+                  ...
+                  if dk_request_filter(...):
+                      ...
+          # ==== Dev `main()` harness exclusion (Turn 5c) — disabled for bisect ===

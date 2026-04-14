@@ -1,0 +1,52 @@
+fixture_id: pi_009
+category: prompt_injection
+source_type: direct_http
+vuln_subtype: IIV-2
+verdict: positive
+expected_check_id: code-prompt-injection-risk
+expected_severity: high
+defense_present:
+  - name: naive_keyword_filter
+    recognized: false
+    description: "Substring blocklist of 6 common injection phrases (case-insensitive). Trivially bypassable via case variation, encoding, language switching, paraphrase, or token splitting."
+defense_score: 0
+adversarial_pair: ""
+source: synthetic
+source_url: ""
+source_commit: ""
+source_lines: ""
+license: synthetic
+labeled_by: claude+kkmookhey
+labeled_at: 2026-04-12
+reasoning: |
+  Canonical "weak defense recognized but not credited" TP under the
+  simplified binary defense model. The keyword filter IS a defense
+  attempt and is correctly identified as such, but it is NOT on the
+  recognized-guardrail list and so `recognized: false`.
+
+  The bypass space is vast and documented in every published red-team
+  study:
+    - Case variation defeats .lower() if forgotten
+    - Unicode homoglyphs defeat substring match
+    - Zero-width space splitting inside phrases
+    - Language switching (French, Spanish, etc.)
+    - Semantic paraphrase ("disregard the above", "set aside prior")
+    - Base64 / hex / leetspeak encoding
+    - Token-level splitting "ig"+"nore"+" previous"
+    - Novel injection phrases the blocklist doesn't anticipate
+
+  Verdict: positive. The finding's remediation message will identify
+  the keyword filter by name and recommend replacing it with a
+  recognized guardrail (Bedrock Guardrails, Lakera Guard, NeMo, Azure
+  Prompt Shields) or a correctly-prompted LLM-as-judge.
+
+  The defense_present field is the key UX differentiator from v1. A v1
+  scanner that only emits "prompt injection risk" gives the developer
+  no actionable guidance. v2 says "you have a keyword filter which is
+  insufficient — here is what to replace it with."
+
+  This fixture tests that the scanner:
+    (a) correctly identifies the keyword filter function as a defense attempt,
+    (b) correctly classifies it as unrecognized (recognized: false),
+    (c) records it in defense_present for remediation messaging,
+    (d) still emits a finding with the correct severity.

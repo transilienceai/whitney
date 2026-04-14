@@ -1,0 +1,62 @@
+fixture_id: pi_n02
+category: prompt_injection
+source_type: direct_http
+vuln_subtype: DPI-1
+verdict: negative
+expected_check_id: code-prompt-injection-risk
+expected_severity: high
+defense_present:
+  - name: lakera_guard
+    recognized: true
+    description: "POST to api.lakera.ai/v1/prompt_injection on user input BEFORE main LLM call; rejects flagged inputs at the boundary with HTTP 400"
+defense_score: 10
+adversarial_pair: pi_001
+source: synthetic
+source_url: ""
+source_commit: ""
+source_lines: ""
+license: synthetic
+labeled_by: claude+kkmookhey
+labeled_at: 2026-04-12
+reasoning: |
+  Canonical TN under the simplified binary defense model. Lakera Guard
+  is a recognized vendor guardrail purpose-built for prompt injection.
+  The call pattern satisfies all three validity requirements:
+
+    1. ORDERING: lakera_flagged(user_text) runs BEFORE
+       client.chat.completions.create(). Stage 3 LLM triage must confirm
+       the guardrail call is actually on the path from source to sink.
+
+    2. REJECTION: if flagged, the endpoint returns HTTP 400 with an error
+       body. The request does not proceed to the main LLM call. Stage 3
+       must confirm the code path is blocked, not just logged.
+
+    3. INPUT COVERAGE: the guardrail is called on user_text (the entire
+       untrusted content), not on a subset. Stage 3 must confirm the
+       entire untrusted source flows through the guardrail.
+
+  defense_present records one entry with `recognized: true`. Under the
+  binary rule, any recognized guardrail that meets the three validity
+  requirements is sufficient → verdict negative.
+
+  This is the pattern Whitney SHOULD recommend in remediation guidance.
+  When the scanner emits a finding against a Pydantic-only endpoint
+  (pi_010), the remediation should point at this shape as the fix.
+
+  Scanner must recognize all common vendor guardrail invocation forms:
+    - Direct HTTP: requests.post to api.lakera.ai / api.lakera.com
+    - SDK: lakera_client.PromptInjection.detect(), lakera_chainguard wrappers
+    - AWS Bedrock: bedrock.apply_guardrail, GuardrailIdentifier= param on invoke_model
+    - Azure: azure.ai.contentsafety.ContentSafetyClient.detect_jailbreak
+    - NeMo: nemoguardrails.LLMRails / rails.generate
+    - OpenAI Moderation: client.moderations.create
+    - GuardrailsAI, LLM-Guard, Rebuff, Pangea, Protect AI variants
+  These are separate fixtures (pi_n01 Bedrock, pi_n03 NeMo, pi_n04 LLM-judge).
+
+  DEFERRED: validating that Lakera's underlying policy / detection model
+  is configured to catch the relevant attack classes. Phase A credits
+  "the guardrail is called" as sufficient; Phase E will extend to
+  validating the policy itself.
+
+  If the scanner regresses on this fixture, the entire guardrail-
+  recognition architecture is broken.

@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+*.egg
+.eggs/
+pip-wheel-metadata/
+
+# Virtualenvs
+venv/
+.venv/
+env/
+.env
+ENV/
+
+# Test / coverage artifacts
+.pytest_cache/
+.tox/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+*.cover
+
+# Whitney runtime artifacts
+.whitney/
+~/.whitney/triage_cache.json
+eval_*.json
+findings.json
+sbom.json
+
+# Editor / OS
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Local secrets — never commit
+.env.local
+*.pem
+*.key
+secrets/

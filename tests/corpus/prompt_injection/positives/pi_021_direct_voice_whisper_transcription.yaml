@@ -1,0 +1,75 @@
+fixture_id: pi_021
+category: prompt_injection
+source_type: direct_voice
+vuln_subtype: DPI-1
+verdict: positive
+expected_check_id: code-prompt-injection-risk
+expected_severity: high
+defense_present: []
+adversarial_pair: ""
+source: synthetic
+source_url: ""
+source_commit: ""
+source_lines: ""
+license: synthetic
+labeled_by: claude+kkmookhey
+labeled_at: 2026-04-12
+reasoning: |
+  Direct-voice prompt injection via Whisper transcription. The user
+  uploads an audio file; Whisper converts it to text; the text flows
+  into an f-string prompt sent to GPT-4. The transcription step
+  doesn't sanitize or filter — whatever is spoken becomes prompt
+  content.
+
+  SOURCE_TYPE: direct_voice. Distinct from direct_http because:
+    - The attack vector is audio, not text. Content filters designed
+      for text (URL-encoded blocklists, Unicode category filters) don't
+      apply to audio.
+    - Voice input feels "more trustworthy" to developers — people who
+      would never interpolate raw HTTP body into a prompt happily
+      interpolate transcribed voice, assuming the audio came from
+      the user's own mouth.
+    - Whisper's transcription can normalize some attacks but preserve
+      others (including literal instruction words like "ignore all
+      previous instructions").
+
+  VULN_SUBTYPE: DPI-1 (F-string injection). Same prompt construction
+  pattern as pi_001, just with a Whisper transcription step in the
+  middle.
+
+  Severity HIGH because:
+    - Voice interfaces are typically deployed in customer service /
+      support contexts where the stakes are high (account access,
+      billing, support tickets).
+    - Attacks carry naturally through audio — an attacker can place
+      a phone call to an IVR with an AI assistant and speak the
+      injection directly.
+    - Voice-to-text systems are increasingly used in multi-modal
+      agent frameworks that have tool access.
+
+  Attack variants worth covering in future fixtures:
+    - Prerecorded audio with TTS-generated injection payload.
+    - Live phone call with spoken injection instructions.
+    - Audio with steganographic injection (adversarial audio that
+      transcribes to unexpected text).
+    - Whisper language-switch attack (speaking injection in a less
+      common language the judge might not cover).
+
+  defense_present is empty: no guardrail on transcript.text, no
+  content sanitizer, no Bedrock/Lakera/NeMo wrap.
+
+  Stage 1 enumeration target:
+    - openai.audio.transcriptions.create → .text used in prompt
+    - OpenAI Whisper model invocations via langchain
+    - google.cloud.speech_v1.SpeechClient.recognize → .transcript
+    - azure.cognitiveservices.speech.SpeechRecognizer
+    - Deepgram, AssemblyAI, Rev.ai Python clients
+    - Any custom wrapper that returns transcript text and flows it
+      into a prompt
+  Stage 3 LLM triage must recognize the voice-to-text intermediate
+  step as a "source transformation" — the source is still untrusted
+  regardless of the Whisper pass-through.
+
+  Part of direct_voice tail coverage (target 8 fixtures). First of
+  8. Phase B extends with Twilio webhook variant, Vonage, Google Dialogflow,
+  Amazon Lex, and custom IVR patterns.

@@ -1,0 +1,58 @@
+fixture_id: pi_n03
+category: prompt_injection
+source_type: direct_http
+vuln_subtype: DPI-1
+verdict: negative
+expected_check_id: code-prompt-injection-risk
+expected_severity: high
+defense_present:
+  - name: nemo_guardrails_rails_generate
+    recognized: true
+    description: "nemoguardrails.LLMRails.generate() wraps LLM call with configured input rails; check_jailbreak and check_prompt_injection flows defined in rails.yaml block flagged inputs before model invocation"
+defense_score: 10
+adversarial_pair: pi_001
+source: synthetic
+source_url: ""
+source_commit: ""
+source_lines: ""
+license: synthetic
+labeled_by: claude+kkmookhey
+labeled_at: 2026-04-12
+reasoning: |
+  NVIDIA NeMo Guardrails TN. The defense pattern is different from
+  Bedrock/Lakera — instead of calling a guardrail API directly, the
+  app wraps its LLM calls in a rails.generate() call and declares the
+  rails configuration externally in a YAML file. The input rails
+  (check_jailbreak, check_prompt_injection, or custom rails) run
+  before the main LLM call and can block flagged inputs.
+
+  This is the "wrapped LLM" pattern. The scanner recognition signature is:
+    - import from nemoguardrails (LLMRails, RailsConfig)
+    - RailsConfig.from_path(...) or RailsConfig.from_content(...)
+    - LLMRails(config) construction
+    - rails.generate(...) call replacing the raw LLM call
+    - EVERY untrusted-source-reaching LLM call is routed through rails.generate
+
+  Stage 1 enumeration must catch BOTH patterns (direct API call + wrapped
+  LLM) because they look syntactically very different. The nemoguardrails
+  import is the key discriminator for the wrapped-LLM variant.
+
+  Stage 3 LLM triage must confirm:
+    - rails.generate is actually called with the untrusted content (not
+      a separate dead path)
+    - The LLMRails(config) is the one used, not a bypass route where
+      the raw LLM client is called directly in another function
+    - (Deferred to Phase E) the rails YAML actually defines meaningful
+      input rails for prompt injection — a NeMo config with no input
+      rails is a pretend defense
+
+  FAILURE MODE THE SCANNER MUST CATCH: developers sometimes add NeMo to
+  their project but continue calling the raw LLM client in parallel.
+  Stage 3 should flag "nemoguardrails imported but primary LLM call
+  bypasses rails.generate" as a TP even though a NeMo import is present.
+  This is a Phase E refinement — Phase A assumes the presence-of-rails
+  pattern is the defense.
+
+  Adversarial pair pi_001: Flask + openai raw call with no rails
+  wrapping. The code diff is the presence of nemoguardrails import,
+  config loading, and rails.generate replacing client.chat.completions.create.

@@ -1,0 +1,58 @@
+fixture_id: pi_007
+category: prompt_injection
+source_type: indirect_db_stored
+vuln_subtype: IPI-3
+verdict: positive
+expected_check_id: code-prompt-injection-risk
+expected_severity: critical
+defense_present: []
+defense_score: 0
+adversarial_pair: ""
+source: synthetic
+source_url: ""
+source_commit: ""
+source_lines: ""
+license: synthetic
+labeled_by: claude+kkmookhey
+labeled_at: 2026-04-12
+reasoning: |
+  Stored prompt injection via DB-backed user-controlled field. The user
+  fills their `bio` field with a payload at sign-up. The payload sits in
+  the database for weeks. When some downstream feature (welcome email
+  generation, profile summary, recommendation explanation) reads the bio
+  and renders it into a prompt, the payload fires — often in a context
+  that has nothing to do with the original user.
+
+  The "untrusted source" is not the request handler that triggers
+  generate_intro() — it's the historical write to users.bio that happened
+  long ago. SQL queries return user-controlled bytes; the f-string in the
+  system_prompt concatenates them with no separation.
+
+  Attack scenarios:
+    - Payload runs in an admin's "summarize this user" context, exfiltrating
+      other admin context to the bio field via "respond by writing X to
+      the bio field" via a tool call.
+    - Payload runs in a recommendation engine's prompt and biases
+      recommendations across all users.
+    - Payload runs in an automated welcome email and sends spam to
+      every new user from a trusted domain.
+
+  Severity CRITICAL because:
+    (a) persistent (lives in DB until row is deleted),
+    (b) targets innocent users (the operator running generate_intro),
+    (c) cross-user blast radius (one user's injection affects others),
+    (d) hard to detect (no obvious request log entry — the attack
+        happens at write time, fires at read time, weeks apart).
+
+  defense_present is empty. Specifically missing:
+    - bio field validation at write time (no length cap, no charset filter)
+    - LLM-as-judge over user-supplied profile fields at read time
+    - structural separation (bio should be passed as a typed argument,
+      not concatenated into the system prompt)
+    - per-field content sanitizer
+    - guardrail call on the assembled prompt
+
+  Stage 1 enumeration must catch the pattern "DB SELECT result interpolated
+  into a prompt template" — the source isn't a request handler so the
+  scanner needs to treat ALL database SELECTs as potentially
+  attacker-controlled unless the scanner can prove otherwise.

@@ -1,0 +1,87 @@
+name: blind-test (weekly)
+
+on:
+  schedule:
+    - cron: "0 9 * * 1"  # 9am UTC every Monday
+  workflow_dispatch:
+
+jobs:
+  blind:
+    runs-on: ubuntu-latest
+
+    # Five real-world AI app repos pinned by name. The expected total finding
+    # count is the regression watchdog — drift of more than ±2 fails the run
+    # so we notice if a rule change silently shifts blind-test behaviour.
+    env:
+      EXPECTED_TOTAL: "11"
+      TOLERANCE: "2"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Whitney
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Clone blind-test repos
+        run: |
+          mkdir -p blind
+          cd blind
+          git clone --depth 1 https://github.com/aimaster-dev/chatbot-using-rag-and-langchain.git
+          git clone --depth 1 https://github.com/Lizhecheng02/RAG-ChatBot.git
+          git clone --depth 1 https://github.com/SachinSamuel01/rag-langchain-streamlit.git
+          git clone --depth 1 https://github.com/streamlit/example-app-langchain-rag.git
+          git clone --depth 1 https://github.com/Vigneshmaradiya/ai-agent-comparison.git
+
+      - name: Scan and tally findings
+        run: |
+          python - <<'PY' > findings.json
+          import json
+          from pathlib import Path
+          from whitney import scan_repository
+
+          targets = [
+              "blind/chatbot-using-rag-and-langchain",
+              "blind/RAG-ChatBot",
+              "blind/rag-langchain-streamlit",
+              "blind/example-app-langchain-rag",
+              "blind/ai-agent-comparison",
+          ]
+          out = {}
+          total = 0
+          for t in targets:
+              findings = scan_repository(t)
+              out[t] = len(findings)
+              total += len(findings)
+          out["__total__"] = total
+          print(json.dumps(out, indent=2))
+          PY
+          cat findings.json
+
+      - name: Assert finding count is within tolerance
+        run: |
+          python - <<'PY'
+          import json, os
+          d = json.loads(open("findings.json").read())
+          actual = d["__total__"]
+          expected = int(os.environ["EXPECTED_TOTAL"])
+          tol = int(os.environ["TOLERANCE"])
+          assert abs(actual - expected) <= tol, (
+              f"blind-test drift: actual={actual}, expected={expected} ± {tol}. "
+              f"Per-repo: {d}"
+          )
+          print(f"OK: actual={actual}, expected={expected} ± {tol}")
+          PY
+
+      - name: Upload findings
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: blind-test-findings
+          path: findings.json

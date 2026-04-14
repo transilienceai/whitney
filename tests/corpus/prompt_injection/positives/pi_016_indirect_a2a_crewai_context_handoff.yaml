@@ -1,0 +1,77 @@
+fixture_id: pi_016
+category: prompt_injection
+source_type: indirect_a2a
+vuln_subtype: IPI-4
+verdict: positive
+expected_check_id: code-prompt-injection-risk
+expected_severity: critical
+defense_present: []
+defense_score: 0
+adversarial_pair: ""
+source: synthetic
+source_url: ""
+source_commit: ""
+source_lines: ""
+license: synthetic
+labeled_by: claude+kkmookhey
+labeled_at: 2026-04-12
+reasoning: |
+  Indirect prompt injection via agent-to-agent (A2A) context handoff
+  in a CrewAI pipeline. The researcher agent's output flows into the
+  writer agent's context via `context=[research_task]`, with no
+  filtering or guardrail between them.
+
+  The attack surface is the *chain*, not any single agent. If ANY of:
+    - researcher's web_search tool returns attacker-controlled content
+    - researcher's file_read tool reads an attacker-planted document
+    - researcher's scraping tool hits a compromised page
+    - researcher's RAG tool retrieves a poisoned chunk
+  ... then the researcher's task output will contain the injection,
+  and that output passes through CrewAI's context handoff to the
+  writer agent unmodified.
+
+  The writer, reading the "research findings" as if they were trusted,
+  follows any embedded instructions. In an agentic pipeline with tool
+  access, the writer could be tricked into calling tools it otherwise
+  wouldn't (exfiltration, privileged operations, etc.).
+
+  Severity CRITICAL because:
+    (a) A2A pipelines aggregate capabilities across agents — one
+        compromised hop compromises the whole pipeline,
+    (b) the attack is transitive — a user whose task kicks off the
+        pipeline can be targeted via any upstream tool's data source,
+        even if they never directly see the injection,
+    (c) detection is hard — the injection is buried inside the
+        researcher's "factual findings" output, which looks legitimate
+        to both the pipeline operator and the writer agent,
+    (d) CrewAI (and AutoGen, LangGraph, Semantic Kernel) document the
+        `context=` handoff pattern prominently — every tutorial on
+        multi-agent workflows uses it, so prevalence will be very high.
+
+  defense_present is empty. Missing defenses:
+    - LLM-as-judge over each agent's output before it flows to the
+      next agent (inter-agent content filter)
+    - Vendor guardrail (Bedrock Guardrails / Lakera) on each handoff
+    - Structural separation: writer should receive researcher's output
+      as a typed JSON field explicitly tagged "untrusted data", not
+      free text in a prompt context
+    - Per-agent tool allowlists that prevent downstream agents from
+      executing actions the upstream content suggests
+
+  Stage 1 enumeration must recognize the CrewAI shape:
+    - `Task(..., context=[other_task])` — direct A2A dependency
+    - `crew.kickoff(...)` on a Crew with multiple agents and a
+      sequential or hierarchical process
+    - LangGraph equivalents: StateGraph edges where one node's output
+      is another node's input via a shared state field
+    - AutoGen equivalents: GroupChat / RoundRobin with multiple
+      AssistantAgent participants
+    - Semantic Kernel: Plan execution with multiple Skill invocations
+      where outputs chain
+
+  This source_type is architecturally the hardest because the "source"
+  is not a syntactic location but a graph edge. Stage 1 Semgrep rules
+  for this will be the second-hardest to write after multi_turn. Stage
+  2 data flow must trace task→task dependencies across the Crew
+  definition. Stage 3 LLM triage must reason about "could any of this
+  agent's tools return untrusted content" for each agent in the chain.

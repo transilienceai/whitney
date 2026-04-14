@@ -1,0 +1,74 @@
+fixture_id: pi_n01
+category: prompt_injection
+source_type: direct_http
+vuln_subtype: DPI-1
+verdict: negative
+expected_check_id: code-prompt-injection-risk
+expected_severity: high
+defense_present:
+  - name: bedrock_apply_guardrail
+    recognized: true
+    description: "bedrock.apply_guardrail called on user_text (source=INPUT) before invoke_model; returns GUARDRAIL_INTERVENED on flagged input, endpoint rejects with HTTP 400"
+  - name: bedrock_invoke_model_guardrail_params
+    recognized: true
+    description: "invoke_model called with guardrailIdentifier + guardrailVersion, causing Bedrock to apply the policy to both input and output"
+defense_score: 10
+adversarial_pair: pi_001
+source: synthetic
+source_url: ""
+source_commit: ""
+source_lines: ""
+license: synthetic
+labeled_by: claude+kkmookhey
+labeled_at: 2026-04-12
+reasoning: |
+  Canonical AWS vendor-guardrail TN. Two distinct guardrail integration
+  patterns are present, either of which alone would be sufficient:
+
+    1. Explicit pre-call: bedrock.apply_guardrail(source="INPUT",
+       content=[{"text": {"text": user_text}}]) is called before any
+       downstream LLM invocation. The result's "action" field is checked
+       for GUARDRAIL_INTERVENED and the request is rejected with HTTP 400
+       on a positive. This satisfies all three validity requirements:
+         - Ordering: pre-call (before invoke_model)
+         - Rejection: HTTP 400, not just logged
+         - Input coverage: the full user_text is passed to the guardrail
+
+    2. Inline via invoke_model params: guardrailIdentifier= and
+       guardrailVersion= on invoke_model cause Bedrock to apply the
+       configured policy transparently on the server side. Either the
+       request is short-circuited (input policy violation) or the
+       response is filtered (output policy violation). This is the
+       "defense at the model call" pattern.
+
+  Both patterns are common in production AWS Bedrock apps. The scanner
+  must recognize BOTH and credit either as a sufficient defense.
+
+  Scanner Stage 1 recognition patterns needed:
+    - apply_guardrail method call on any bedrock / bedrock-runtime client
+    - guardrailIdentifier / guardrailVersion kwargs on invoke_model,
+      invoke_model_with_response_stream, converse, converse_stream
+    - LangChain wrapper: BedrockLLM(guardrails={"guardrailId":..., "guardrailVersion":...})
+    - LangChain wrapper: ChatBedrock(guardrails=...)
+    - boto3 client("bedrock-runtime") method calls with guardrail params
+
+  Stage 3 LLM triage confirms:
+    - The guardrail call is actually on the data-flow path from the
+      untrusted source to the main LLM call (not a dead call in
+      another branch)
+    - The guardrail ID is not a dev/test placeholder that lives in a
+      config marked "disable in production"
+    - GUARDRAIL_INTERVENED (or equivalent) branches actually reject
+
+  DEFERRED to Phase E: validate that the specific GuardrailIdentifier's
+  policy configuration actually covers prompt injection. A Bedrock
+  guardrail configured only for PII redaction without a PROMPT_ATTACK
+  filter is not effective against prompt injection. Phase E will
+  implement the policy fetch + validation step. For Phase A, "the
+  guardrail is called correctly" is sufficient for TN.
+
+  Adversarial pair pi_001 is the same Flask + Bedrock shape without
+  any guardrail params. Code difference is ~15 lines — the only
+  meaningful change is the presence of the guardrail call. The
+  scanner must learn that those 15 lines are the entire difference
+  between "critical vulnerability" and "properly defended."

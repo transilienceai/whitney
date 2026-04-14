@@ -1,0 +1,84 @@
+rules:
+  # ===========================================================================
+  # Whitney experiment: Semgrep taint-mode rule for prompt injection detection.
+  # Targeted at real-world Streamlit + LangChain + Flask/FastAPI patterns.
+  # Intra-file taint tracing only (Semgrep OSS).
+  # ===========================================================================
+  - id: whitney-prompt-injection-taint
+    mode: taint
+    message: >
+      Untrusted user input flows into an LLM call without passing through a
+      recognised guardrail. Apply Bedrock Guardrails, NeMo, Lakera, OpenAI
+      Moderation, or a correct LLM-as-Judge pre-call before invocation.
+    severity: WARNING
+    languages: [python]
+    metadata:
+      check_id: code-prompt-injection-risk
+      whitney_severity: high
+      owasp: ["LLM01:2025"]
+      technology: [streamlit, langchain, flask, fastapi, openai, anthropic]
+
+    pattern-sources:
+      - pattern: st.chat_input(...)
+      - pattern: st.text_input(...)
+      - pattern: st.text_area(...)
+      - pattern: st.sidebar.text_input(...)
+      - pattern: st.sidebar.text_area(...)
+      - pattern: st.sidebar.chat_input(...)
+      - pattern: st.file_uploader(...)
+      - pattern: st.sidebar.file_uploader(...)
+      - pattern: request.json
+      - pattern: request.json[...]
+      - pattern: request.form
+      - pattern: request.form[...]
+      - pattern: request.args
+      - pattern: request.args[...]
+      - pattern: request.values.get(...)
+      - pattern: request.files[...]
+      - pattern: sys.stdin.read(...)
+      - pattern: input(...)
+      - pattern: requests.get(...).text
+      - pattern: requests.get(...).content
+      - pattern: httpx.get(...).text
+      - pattern: WebBaseLoader(...).load()
+      - pattern: PyPDFLoader(...).load()
+      - pattern: SeleniumURLLoader(...).load()
+      - pattern: $STORE.similarity_search(...)
+      - pattern: $STORE.similarity_search_with_score(...)
+      - pattern: $STORE.as_retriever(...)
+      - pattern: $RETRIEVER.get_relevant_documents(...)
+      - pattern: $RETRIEVER.invoke(...)
+
+    pattern-sanitizers:
+      - pattern: $BEDROCK.apply_guardrail(...)
+      - pattern: $AZURE.detect_jailbreak(...)
+      - pattern: $AZURE.analyze_text(...)
+      - pattern: requests.post("https://api.lakera.ai/...", ...)
+      - pattern: $LAKERA.PromptInjection.detect(...)
+      - pattern: load_nemo_guardrails(...)
+      - pattern: LLMRails(...)
+      - pattern: $CLIENT.moderations.create(...)
+      - pattern: rebuff.detect_injection(...)
+      - pattern: llm_guard.scan_prompt(...)
+      - pattern: dk_request_filter(...)
+
+    pattern-sinks:
+      - pattern: $CLIENT.chat.completions.create(...)
+      - pattern: $CLIENT.messages.create(...)
+      - pattern: $CLIENT.completions.create(...)
+      - pattern: openai.ChatCompletion.create(...)
+      - pattern: $CHAIN.invoke(...)
+      - pattern: $CHAIN.ainvoke(...)
+      - pattern: $CHAIN.run(...)
+      - pattern: $CHAIN.arun(...)
+      - pattern: $CHAIN.batch(...)
+      - pattern: $CHAIN.stream(...)
+      - pattern: AgentExecutor(...).invoke(...)
+      - pattern: AgentExecutor(...).run(...)
+      - pattern: create_sql_agent(...).invoke(...)
+      - pattern: create_sql_agent(...).run(...)
+      - pattern: $SQLCHAIN.run(...)
+      - pattern: $PALCHAIN.run(...)
+      - pattern: run_pal_chain_native(...)
+      - pattern: $INDEX.as_query_engine().query(...)
+      - pattern: $QUERY_ENGINE.query(...)

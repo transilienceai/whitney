@@ -1,0 +1,29 @@
+fixture_id: cc_001
+category: colocated_credentials
+verdict: positive
+expected_check_id: code-ai-api-key-exposed
+expected_severity: critical
+source: synthetic
+source_url: ""
+source_commit: ""
+source_lines: ""
+license: synthetic
+labeled_by: claude+kkmookhey
+labeled_at: 2026-04-12
+adversarial_pair: cc_n01
+reasoning: |
+  Hardcoded OpenAI API key (matches sk-proj-* format) assigned to a
+  module-level constant and immediately passed to openai.OpenAI(api_key=).
+  Co-location is unambiguous: the credential and the SDK call are in the
+  same file, two lines apart, and the file imports `openai` so intent is
+  obvious — this is not a test fixture or example string, it is meant to
+  be the live key.
+
+  Severity critical: committing this to git exposes the key, the leak is
+  silent until billing arrives, and it grants full account access (not
+  scoped). The "no chance this is a fixture" judgment comes from
+  (a) module-level naming `OPENAI_API_KEY`, (b) immediate passthrough to
+  OpenAI(api_key=), (c) presence of openai import.
+
+  This is the canonical TP for the category. Adversarial pair cc_n01 has
+  the same string with all the LLM context removed.

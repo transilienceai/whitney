@@ -1,0 +1,53 @@
+fixture_id: pi_020
+category: prompt_injection
+source_type: direct_cli
+vuln_subtype: DPI-3
+verdict: positive
+expected_check_id: code-prompt-injection-risk
+expected_severity: high
+defense_present: []
+adversarial_pair: ""
+source: synthetic
+source_url: ""
+source_commit: ""
+source_lines: ""
+license: synthetic
+labeled_by: claude+kkmookhey
+labeled_at: 2026-04-12
+reasoning: |
+  CLI prompt injection via Click framework + stdin. The untrusted
+  source is `sys.stdin.read()` — whatever is piped into the process.
+  The content is CONCATENATED (not f-string) into the full_prompt
+  and sent to Anthropic.
+
+  SOURCE_TYPE: direct_cli. This fixture is specifically the "stdin"
+  variant of the CLI category. The threat model is distinct from
+  pi_019 (--question arg) because:
+    - stdin is more likely to contain bulk external content
+      (pipes, file redirects, process substitutions).
+    - Stdin contents typically aren't visible in shell history, making
+      forensic analysis harder.
+    - Automation contexts heavily use stdin piping.
+
+  VULN_SUBTYPE: DPI-3 (String concatenation). prompt_prefix +
+  user_content is the canonical string-concat prompt construction.
+  This is a DIFFERENT vuln_subtype from pi_019 (DPI-1 f-string) even
+  though both are direct_cli — the subtype axis captures HOW the
+  prompt is built, not WHERE the input came from.
+
+  Severity HIGH (not medium like pi_019) because stdin piping is more
+  commonly used in automation and with larger/untrusted inputs. An
+  attacker who can influence a log file that gets piped into this
+  summarizer has a much larger attack surface than an attacker who
+  can only influence a single short --question arg.
+
+  defense_present is empty.
+
+  Stage 1 enumeration target: sys.stdin.read/readlines/readline,
+  input(), click.File('-'), sys.argv input-file patterns, and
+  concatenation with LLM prompt. The scanner must recognize string
+  concatenation as a distinct DPI-3 pattern, not just f-strings
+  (DPI-1).
+
+  Part of direct_cli tail coverage. Second of target 8 fixtures
+  for this source type.

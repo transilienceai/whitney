@@ -1,0 +1,60 @@
+fixture_id: pi_008
+category: prompt_injection
+source_type: indirect_mcp
+vuln_subtype: IPI-4
+verdict: positive
+expected_check_id: code-prompt-injection-risk
+expected_severity: critical
+defense_present: []
+defense_score: 0
+adversarial_pair: ""
+source: synthetic
+source_url: ""
+source_commit: ""
+source_lines: ""
+license: synthetic
+labeled_by: claude+kkmookhey
+labeled_at: 2026-04-12
+reasoning: |
+  Indirect prompt injection via MCP tool response. The host LLM application
+  calls an MCP server's tool ("fetch_data"), receives a string response,
+  and concatenates it into the user-content of the next prompt with no
+  separation. The MCP server is the "untrusted source" — even if it's a
+  legitimate vendor's server, the data it returns is often externally
+  controlled (database-backed, web-scraped, user-submitted).
+
+  Two distinct attack surfaces in the MCP ecosystem:
+    1. Supply-chain: a malicious MCP server installed by the user (or
+       auto-installed by an agent) returns crafted responses that compromise
+       the host application.
+    2. Data-channel: a legitimate MCP server returns attacker-influenced
+       data (e.g., a "fetch GitHub issue" tool returns issue text written
+       by a malicious commenter) that the host treats as trustworthy.
+
+  MCP sampling is the worst case (not shown in this fixture, separate
+  fixture to follow): the MCP server asks the host LLM to complete on
+  text the server controls. There the MCP server is literally feeding
+  the prompt to the host model.
+
+  Severity CRITICAL because:
+    (a) MCP is a new and fast-growing surface area; defenders are behind,
+    (b) the supply-chain dimension makes one compromised server a fleet-wide
+        compromise,
+    (c) the data-channel dimension affects every MCP user even with trusted
+        servers,
+    (d) most current MCP SDK examples (including Anthropic's own quickstart)
+        concatenate tool outputs raw into prompts, so prevalence will be
+        very high once Whitney users start scanning real MCP-using apps.
+
+  defense_present is empty. Specifically missing:
+    - server allowlist (only call MCP servers on a vetted list)
+    - content sanitizer over MCP responses
+    - structural separation (MCP responses passed as a typed tool argument,
+      not concatenated into prompt text)
+    - LLM-as-judge over MCP responses before reasoning over them
+    - guardrail call (Lakera, NeMo, Bedrock) on the assembled prompt
+
+  Stage 1 enumeration: pattern is "session.call_tool(...).content[0].text
+  flowing into messages[].content" or "result.content interpolated into
+  any prompt template." The mcp.* import is the discriminator that says
+  "this is the MCP source class."

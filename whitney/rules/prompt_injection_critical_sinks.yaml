@@ -1,0 +1,190 @@
+rules:
+  # ===========================================================================
+  # Whitney prompt-injection critical-sinks ruleset.
+  #
+  # Philosophy: these are LangChain / LlamaIndex sinks where the *mere
+  # presence* of the sink is a critical finding, independent of whether
+  # data flow proves exploitability. The sink directly executes LLM
+  # output — PAL chains run generated Python, SQL chains run generated
+  # SQL — so any untrusted context reaching them becomes RCE or arbitrary
+  # DB access. Taint-based detection is insufficient here because:
+  #
+  #   1. Taint tracing through LangChain's agent reasoning loops is
+  #      intractable for static analysis.
+  #   2. The source may be function parameters deep in a helper module
+  #      that intraprocedural taint cannot follow.
+  #   3. The sink is inherently dangerous regardless of path — CVE
+  #      history (CVE-2023-36258 for PALChain, P2SQL paper from Pedro
+  #      et al. 2023) documents this as presence-based risk.
+  #
+  # Pattern-regex rules are the right tool because we're asking "does
+  # this dangerous API appear at all?" not "does this specific data
+  # flow reach it?"
+  #
+  # These rules intentionally overlap with `prompt_injection_taint.yaml`.
+  # A fixture that uses `create_db_chain` with a clear user-input source
+  # may fire BOTH rules. This is belt-and-suspenders by design — if
+  # taint tracing fails (due to dynamic dispatch, wrapper libraries, or
+  # function-parameter sources), the pattern rule still catches it.
+  # Semgrep's finding deduplication handles the overlap at report time.
+  #
+  # SCOPE NOTE: exec(), eval(), os.system(), subprocess.run() are
+  # deliberately NOT included here. Those are "LLM output → traditional
+  # sink" (UOH / llm_output_to_sink category) which belongs to Phase E,
+  # not Phase A's prompt injection focus. Adding them here would blur
+  # the category boundary and duplicate work that Snyk Code already does
+  # well. Phase A stays narrowly focused on LangChain/LlamaIndex sinks
+  # where the PRESENCE of the sink is the prompt-injection signal.
+  #
+  # KNOWN TRANSIENT: these rules will fire on fixtures that have both
+  # a critical sink AND a guard-style defense (e.g. pi_t2_n04 with
+  # LLM-as-judge wrapping create_db_chain). Turn 5's missing_defense
+  # ruleset is designed to suppress those via the inverse question
+  # "is a recognised guardrail called in the function?" — see
+  # prompt_injection_missing_defense.yaml (not yet built).
+  # ===========================================================================
+
+  # --- LangChain PAL chain / Python REPL tool (LLM4Shell) ---
+  # Uses AST patterns (not pattern-regex) so that pattern-not-inside
+  # clauses can suppress findings on functions that also call a
+  # recognised guardrail (Turn 5 precision pass).
+  - id: code-prompt-injection-risk-pal-chain
+    patterns:
+      - pattern-either:
+          - pattern: run_pal_chain(...)
+          - pattern: run_pal_chain_native(...)
+          - pattern: PALChain(...)
+          - pattern: PythonREPLTool(...)
+          - pattern: PythonAstREPLTool(...)
+      # Guardrail suppression (Turn 5)
+      - pattern-not-inside: |
+          def $F(...):
+              ...
+              $BEDROCK.apply_guardrail(...)
+              ...
+      - pattern-not-inside: |
+          async def $F(...):
+              ...
+              $BEDROCK.apply_guardrail(...)
+              ...
+      - pattern-not-inside: |
+          def $F(...):
+              ...
+              lakera_flagged(...)
+              ...
+      - pattern-not-inside: |
+          async def $F(...):
+              ...
+              lakera_flagged(...)
+              ...
+      - pattern-not-inside: |
+          def $F(...):
+              ...
+              dk_request_filter(...)
+              ...
+      - pattern-not-inside: |
+          async def $F(...):
+              ...
+              dk_request_filter(...)
+              ...
+    message: >
+      LangChain PAL chain / Python REPL tool detected. These sinks execute
+      LLM-generated Python code directly, so any prompt injection reaching
+      them escalates to RCE. This is the LLM4Shell attack family
+      (CVE-2023-36258 against LangChain's PALChain was the canonical
+      example, removed from langchain-core for this reason).
+    severity: ERROR
+    languages: [python]
+    metadata:
+      check_id: code-prompt-injection-risk
+      whitney_severity: critical
+      cwe: ["CWE-94", "CWE-78"]
+      owasp: ["LLM01:2025"]
+      owasp_agentic: ["AA01:2026"]
+      confidence: HIGH
+      category: security
+      technology: [langchain, langchain_experimental]
+      references:
+        - "https://github.com/advisories/GHSA-f73w-4m7g-ch9x"
+        - "https://python.langchain.com/docs/security"
+      remediation: >
+        Remove PALChain / Python REPL tool entirely if possible — PALChain
+        was deprecated from langchain-core in 2023 for exactly this reason.
+        If code execution is required, use a sandboxed runner (E2B, Modal,
+        a restricted container) AND wrap the input in an LLM-as-judge
+        pre-call or a Bedrock/NeMo/Lakera guardrail. Do not trust that
+        the LLM's generated code is safe.
+
+  # --- LangChain / LlamaIndex SQL chain / agent (P2SQL) ---
+  # AST patterns with guardrail suppression (same as PAL chain rule).
+  - id: code-prompt-injection-risk-langchain-sql-chain
+    patterns:
+      - pattern-either:
+          - pattern: create_db_chain(...)
+          - pattern: SQLDatabaseChain(...)
+          - pattern: create_sql_query_chain(...)
+          - pattern: create_sql_agent(...)
+          - pattern: SQLAgent(...)
+          - pattern: NLSQLTableQueryEngine(...)
+          - pattern: PandasQueryEngine(...)
+      # Guardrail suppression (Turn 5)
+      - pattern-not-inside: |
+          def $F(...):
+              ...
+              $BEDROCK.apply_guardrail(...)
+              ...
+      - pattern-not-inside: |
+          async def $F(...):
+              ...
+              $BEDROCK.apply_guardrail(...)
+              ...
+      - pattern-not-inside: |
+          def $F(...):
+              ...
+              lakera_flagged(...)
+              ...
+      - pattern-not-inside: |
+          async def $F(...):
+              ...
+              lakera_flagged(...)
+              ...
+      - pattern-not-inside: |
+          def $F(...):
+              ...
+              dk_request_filter(...)
+              ...
+      - pattern-not-inside: |
+          async def $F(...):
+              ...
+              dk_request_filter(...)
+              ...
+    message: >
+      LangChain/LlamaIndex SQL chain or agent detected. These sinks
+      execute LLM-generated SQL directly against the configured database,
+      so any prompt injection reaching them produces arbitrary SQL
+      execution. This is the P2SQL (prompt-to-SQL) attack class, first
+      formally described by Pedro et al. (2023) "From Prompt Injections
+      to SQL Injection Attacks: How Protected is Your LLM-Integrated
+      Web Application?"
+    severity: ERROR
+    languages: [python]
+    metadata:
+      check_id: code-prompt-injection-risk
+      whitney_severity: critical
+      cwe: ["CWE-94", "CWE-89"]
+      owasp: ["LLM01:2025"]
+      owasp_agentic: ["AA01:2026"]
+      confidence: HIGH
+      category: security
+      technology: [langchain, llamaindex]
+      references:
+        - "https://arxiv.org/abs/2308.01990"
+        - "https://python.langchain.com/docs/security"
+      remediation: >
+        Apply LLM-as-judge on user input AND scope DB credentials to
+        read-only, allowlisted tables. Parameterised queries do not help
+        here because the chain generates the whole query including the
+        table names and predicates. The defence is to constrain what the
+        LLM is allowed to request AND what the DB account is allowed to
+        run. Consider using LlamaIndex's ``NLSQLRetriever`` (retrieval-
+        only) instead of a full SQL agent where possible.

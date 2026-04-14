@@ -1,0 +1,72 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "whitney-scanner"
+version = "0.1.0"
+description = "Open-source static AI security scanner — prompt injection, broken LLM-as-judge, AI SBOM."
+readme = "README.md"
+license = { text = "Apache-2.0" }
+authors = [
+    { name = "Transilience AI", email = "hello@transilience.ai" },
+]
+keywords = [
+    "security",
+    "ai",
+    "llm",
+    "prompt-injection",
+    "static-analysis",
+    "sast",
+    "semgrep",
+    "owasp-llm-top10",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Information Technology",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Security",
+    "Topic :: Software Development :: Quality Assurance",
+]
+requires-python = ">=3.11"
+dependencies = [
+    "semgrep>=1.150",
+]
+
+[project.optional-dependencies]
+triage = ["anthropic>=0.40"]
+# `pyyaml` is required by the corpus eval harness (loads YAML sidecars).
+# `rich` is used by the eval harness to render per-cell tables.
+dev = [
+    "pytest>=7",
+    "pytest-cov",
+    "pyyaml>=6",
+    "rich>=13",
+]
+
+[project.urls]
+Homepage = "https://github.com/transilienceai/whitney"
+Repository = "https://github.com/transilienceai/whitney"
+Issues = "https://github.com/transilienceai/whitney/issues"
+Documentation = "https://github.com/transilienceai/whitney#readme"
+
+[project.scripts]
+whitney = "whitney.cli:main"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["whitney*"]
+
+[tool.setuptools.package-data]
+whitney = ["rules/*.yaml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "eval.py"]

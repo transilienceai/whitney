@@ -1,0 +1,75 @@
+name: corpus eval
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  corpus:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install Whitney + dev deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run corpus eval (default mode — zero LLM calls)
+        run: |
+          python -m tests.corpus.eval --json eval_default.json
+        env:
+          PYTHONIOENCODING: utf-8
+
+      - name: Run corpus eval (mock triage mode)
+        run: |
+          python -m tests.corpus.eval --json eval_triage_mock.json
+        env:
+          PYTHONIOENCODING: utf-8
+          WHITNEY_STRICT_JUDGE_PROMPTS: "1"
+          WHITNEY_TRIAGE_MOCK: "1"
+
+      - name: Upload eval reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: corpus-eval-${{ matrix.python-version }}
+          path: |
+            eval_default.json
+            eval_triage_mock.json
+
+      - name: Assert acceptance criteria — default mode
+        run: |
+          python - <<'PY'
+          import json
+          d = json.loads(open("eval_default.json").read())
+          o = d["overall"]
+          # Default-mode floor (no LLM): 26/3/0/6, F1 0.945. Allow ±2 FN drift.
+          assert o["recall"] >= 0.95, f"default recall regression: {o['recall']}"
+          assert o["fp_rate"] <= 0.40, f"default fp_rate regression: {o['fp_rate']}"
+          print("default mode OK:", o)
+          PY
+
+      - name: Assert acceptance criteria — triage mock mode
+        run: |
+          python - <<'PY'
+          import json
+          d = json.loads(open("eval_triage_mock.json").read())
+          o = d["overall"]
+          # Triage-on floor: must be perfect 26/0/0/9, F1 1.000.
+          assert o["recall"] == 1.0, f"triage recall regression: {o['recall']}"
+          assert o["fp_rate"] == 0.0, f"triage fp_rate regression: {o['fp_rate']}"
+          print("triage mock mode OK:", o)
+          PY

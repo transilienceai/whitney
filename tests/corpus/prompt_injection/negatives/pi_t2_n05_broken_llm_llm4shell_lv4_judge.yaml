@@ -1,0 +1,63 @@
+fixture_id: pi_t2_n05
+category: prompt_injection
+source_type: direct_http
+vuln_subtype: DPI-5
+verdict: negative
+expected_check_id: code-prompt-injection-risk
+expected_severity: critical
+defense_present:
+  - name: llm_as_judge_input_and_output
+    recognized: true
+    description: "Dedicated LLM-as-Judge pre-call on question (llm4shell_lv4_template_for_input_judge) BEFORE run_pal_chain_native; rejects on non-'yes' verdict. Second LLM-as-Judge post-call on PAL output before returning. Both use secure_tag nonce."
+adversarial_construction: fully_real
+adversarial_pair: pi_t2_006
+source: github
+source_url: https://github.com/13o-bbr-bbq/Broken_LLM_Integration_App/blob/main/chatapp/backend/app/llm_agent.py
+source_commit: 90d3f955f9e024175dd01f37d55a1bf263d91013
+source_lines: llm4shell_lv4 function (approx L296-L330)
+license: MIT
+labeled_by: claude+kkmookhey
+labeled_at: 2026-04-12
+reasoning: |
+  FULLY_REAL adversarial pair to pi_t2_006. The LLM4Shell equivalent
+  of the p2sql_lv5 defense. Structurally near-identical to pi_t2_n04
+  (same input/output judge pattern, same secure_tag hardening), but
+  the downstream chain is run_pal_chain_native instead of
+  create_db_chain.
+
+  This fixture matters because it tests whether the scanner can
+  correctly recognize the SAME defense shape applied to a DIFFERENT
+  vulnerable baseline. A scanner that memorized "LLM-as-Judge protects
+  SQL chain" from pi_t2_n04 but fails on "LLM-as-Judge protects PAL
+  chain" here is overfitting to specific sink types. The defense is
+  the same; only the chain being defended is different.
+
+  Defense analysis: same as pi_t2_n04. Recognized LLM-as-Judge pattern
+  with correct structural properties (ordering, rejection, input
+  coverage, secure_tag hardening).
+
+  CAVEAT specific to LLM4Shell: catching LLM4Shell attacks via LLM-as-
+  Judge is HARDER than catching P2SQL attacks because:
+    - SQL attack payloads have detectable syntactic markers (UNION,
+      DROP, INSERT, etc.) that a judge can look for.
+    - Code-execution attack payloads can be disguised as legitimate
+      code questions ("what does os.system('x') do?") and the judge
+      needs to reason about intent, not syntax.
+  In practice, LLM4Shell defenses layer multiple controls (sandboxed
+  execution, AST validation, resource limits) on top of the judge.
+  A judge-only defense is a necessary-but-not-sufficient control.
+
+  For Phase A purposes, under the binary defense model, LLM-as-Judge
+  with correct structural properties counts as a recognized defense
+  and flips the verdict to TN. Phase E will revisit this with a
+  layered-defense analysis that considers sandbox presence.
+
+  Verdict: negative. Recognized defense, TN.
+
+  The two fully_real pairs from the same repo (pi_t2_n04 P2SQL + judge,
+  pi_t2_n05 LLM4Shell + judge) test that the scanner generalizes the
+  defense recognition across sink types. Combined with pi_t2_n02
+  (NeMo Guardrails) and pi_t2_n03 (DeepKeep), the corpus now has
+  FOUR fully_real TNs covering three different recognized defense
+  families (NeMo, DeepKeep, LLM-as-Judge) all from the same source
+  repo — strong Tier 2 density.

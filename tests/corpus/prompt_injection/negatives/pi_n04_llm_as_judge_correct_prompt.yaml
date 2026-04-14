@@ -1,0 +1,75 @@
+fixture_id: pi_n04
+category: prompt_injection
+source_type: direct_http
+vuln_subtype: DPI-1
+verdict: negative
+expected_check_id: code-prompt-injection-risk
+expected_severity: high
+defense_present:
+  - name: llm_as_judge_prompt_injection_detector
+    recognized: true
+    description: "Secondary LLM call with system prompt explicitly enumerating 10+ injection variants (Unicode, homoglyphs, encoding, language, paraphrase, role-play, smuggling, token-split, gradient, system-leak); structured JSON output; reject on positive"
+defense_score: 10
+adversarial_pair: pi_011
+source: synthetic
+source_url: ""
+source_commit: ""
+source_lines: ""
+license: synthetic
+labeled_by: claude+kkmookhey
+labeled_at: 2026-04-12
+reasoning: |
+  LLM-as-judge TN. A dedicated classification call runs before the main
+  LLM call. The defense is sufficient under Phase A's binary model
+  BECAUSE the judge prompt is correct. Criteria that make this judge
+  prompt "correct":
+
+    1. Explicit enumeration of attack variants: the system prompt lists
+       10+ concrete categories the judge must detect, including the
+       harder-to-spot ones (Unicode invisible chars, homoglyphs, encoding,
+       semantic paraphrase). A judge prompt that says only "is this
+       prompt injection?" without enumeration will miss most attack
+       variants in practice.
+
+    2. Structured output: response_format={"type": "json_object"} with
+       a fixed schema. An unstructured judge that returns free text is
+       brittle — the calling code can't reliably branch on the result.
+
+    3. Fail-safe bias: the prompt explicitly says "reject attempts, not
+       only successful exploits." This biases the judge toward positives,
+       which is the correct default for a security filter.
+
+    4. Ordering + rejection: judge_is_injection runs BEFORE the main
+       LLM call, and a positive result causes HTTP 400 rejection
+       before any downstream processing.
+
+  Stage 3 LLM triage MUST validate the judge prompt content. The same
+  code shape with a broken judge prompt (e.g., "is this bad?" with no
+  variant coverage) is a TP — see pi_011 (the adversarial pair).
+
+  Validation criteria Stage 3 applies to judge prompts:
+    - Enumerates ≥5 attack variants including at least one cross-modal
+      (Unicode / encoding) and one semantic (paraphrase / role-play)
+    - Returns structured output (JSON / enum)
+    - Explicitly biases toward rejection
+    - Is not contradicted by a subsequent instruction to "be helpful"
+    - Does not include the untrusted content in the system prompt
+      (user-content separation)
+
+  The scanner must also confirm:
+    - The judge's output is ACTUALLY branched on (if judge_is_injection:)
+      — a code path that calls the judge and then ignores the result is
+      a TP.
+    - The judge runs on the same untrusted content that reaches the
+      main LLM call (not on a different variable).
+    - The judge is not itself vulnerable to injection via its user message
+      — sending the untrusted content as the user message is the correct
+      pattern (as in this fixture); embedding it in the system prompt
+      would be vulnerable.
+
+  DEFERRED: the judge is itself an LLM call, so it consumes tokens and
+  has latency. Phase A accepts this cost. Phase E may revisit with
+  caching / smaller-model routing.
+
+  This fixture is the canonical "correct LLM-as-judge" TN. Its adversarial
+  pair pi_011 is the same shape with a BROKEN judge prompt.

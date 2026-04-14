@@ -1,0 +1,86 @@
+fixture_id: pi_t2_n02
+category: prompt_injection
+source_type: direct_http
+vuln_subtype: DPI-5
+verdict: negative
+expected_check_id: code-prompt-injection-risk
+expected_severity: high
+defense_present:
+  - name: nemo_guardrails_runnable_composition
+    recognized: true
+    description: "load_nemo_guardrails() loads rails.yaml config; runnable composition `prompt_template | (guardrails | model)` causes every LLM invocation to pass through the rails' input and output policies BEFORE reaching the underlying model"
+adversarial_construction: fully_real
+adversarial_pair: pi_t2_003
+source: github
+source_url: https://github.com/13o-bbr-bbq/Broken_LLM_Integration_App/blob/main/chatapp/backend/app/llm_agent.py
+source_commit: 90d3f955f9e024175dd01f37d55a1bf263d91013
+source_lines: prompt_leaking_lv4 function (approx L51-L60)
+license: MIT
+labeled_by: claude+kkmookhey
+labeled_at: 2026-04-12
+reasoning: |
+  FULLY_REAL adversarial pair to pi_t2_003. Both halves of this pair
+  are verbatim from the same upstream source file (llm_agent.py in
+  13o-bbr-bbq/Broken_LLM_Integration_App), authored by the repo
+  maintainer as an explicit graduated-difficulty CTF. No synthetic
+  intervention from us on either side of the pair — this is the
+  gold-standard Tier 2 source.
+
+  Defense analysis:
+    - RECOGNIZED: NeMo Guardrails is on the recognized-guardrail list.
+      load_nemo_guardrails() returns a RunnableRails that wraps the
+      LLM call with configured input and output rails from a YAML
+      config (`rails.yaml`). This is the canonical NeMo integration
+      pattern for LangChain.
+    - COMPOSITION: the pipe operator chain
+        prompt_template | (guardrails | model)
+      means every question → prompt_template → guardrails → model.
+      The rails ALWAYS run before the model. Stage 3 LLM triage must
+      confirm the composition order — if the pipe were
+        prompt_template | model | guardrails
+      the rails would run on the output only, which is a weaker defense
+      (still Tier A but blocks fewer attack classes).
+    - INPUT COVERAGE: the user's `question` is passed to the runnable
+      via .ainvoke({"question": question}). The rails see the same
+      input the model sees.
+    - REJECTION: NeMo Guardrails' default behavior on policy violation
+      is to short-circuit the chain and return a refusal message
+      rather than invoking the model. Stage 3 must verify this isn't
+      overridden by a custom action that logs-but-allows.
+
+  The DEFERRED concern: the actual rails.yaml config is not shown in
+  this fixture — it's in a separate file. A NeMo config with no input
+  rails defined is a "pretend defense" that would pass our Phase A
+  recognition but fail real-world effectiveness. Phase E will extend
+  to inspect the rails.yaml content. For Phase A, "the composition
+  pattern is present" is sufficient for TN.
+
+  Verdict: negative. One recognized defense, binary rule fires TN.
+
+  The two-fixture diff (pi_t2_003 vs pi_t2_n02):
+    pi_t2_003:
+      llm_chain = LLMChain(prompt=prompt, llm=create_chat_openai_model())
+      answer = llm_chain.run(question)
+    pi_t2_n02:
+      guardrails = load_nemo_guardrails()
+      model = create_chat_openai_model()
+      chain_with_guardrails = prompt_template | (guardrails | model)
+      answer = await chain_with_guardrails.ainvoke({"question": question})
+
+  About ~3 lines of code are the entire security delta. This is exactly
+  the kind of distinction our scanner needs to make. A Stage 1 rule
+  that just greps for "LangChain + user input" will flag both as TP.
+  Stage 2 data flow will see both paths lead to an LLM call from a
+  request handler. Only Stage 3 LLM triage — inspecting the actual
+  runnable composition — can correctly flip pi_t2_n02 to TN.
+
+  Attribution: verbatim function copy with explicit imports.
+  License MIT (allowlist), full provenance populated.
+
+  This is also Whitney's FIRST fully_real adversarial pair. All other
+  adversarial pairs in the corpus so far have been fully_synthetic or
+  verbatim_tp_plus_synthetic_defense. Fully_real pairs are rare because
+  most vulnerable demo repos never ship fixed variants. This repo's
+  graduated-difficulty structure is a rare find — we should mine it
+  for more pairs (p2sql_injection_lv1 ↔ lv4, llm_shell_lv1 ↔ lv4, etc.)
+  in follow-up Tier 2 batches.

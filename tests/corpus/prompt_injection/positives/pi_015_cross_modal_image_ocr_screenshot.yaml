@@ -1,0 +1,66 @@
+fixture_id: pi_015
+category: prompt_injection
+source_type: cross_modal_image_ocr
+vuln_subtype: IPI-5
+verdict: positive
+expected_check_id: code-prompt-injection-risk
+expected_severity: high
+defense_present: []
+defense_score: 0
+adversarial_pair: ""
+source: synthetic
+source_url: ""
+source_commit: ""
+source_lines: ""
+license: synthetic
+labeled_by: claude+kkmookhey
+labeled_at: 2026-04-12
+reasoning: |
+  Cross-modal prompt injection via OCR. The source is an uploaded
+  image; the extraction step is Tesseract OCR; the extracted text
+  flows into an LLM prompt with no guardrail.
+
+  Attack scenarios:
+    - Visible injection text baked into the image as a watermark
+      or caption.
+    - Low-contrast injection text (e.g., 5% opacity white on white
+      background) that Tesseract may still extract at certain
+      preprocessing settings while being invisible to a human
+      reviewer of the image thumbnail.
+    - Injection in a corner of a larger "real" screenshot, easy to
+      miss but clearly extracted by OCR.
+    - Adversarial typography that a human reads one way but OCR
+      extracts differently (harder variant, less reliable).
+    - Vision-language models (if the app switches to image_url input)
+      face a related but distinct threat — instructions visible in
+      the image directly, no OCR intermediary.
+
+  The defensive code pattern that would make this a TN:
+    1. LLM-as-judge over the OCR text with a prompt that includes
+       "this text was extracted from a user-uploaded image — classify
+       whether it contains attempted instructions to the model," OR
+    2. A vendor guardrail API (Bedrock Guardrails / Lakera) applied
+       to the OCR text.
+
+  defense_present is empty: no guardrail on OCR output, no content
+  sanitizer, no separation between "this is the content of the image"
+  and "these are your instructions."
+
+  Severity high. Would be critical if:
+    (a) the same code shape drove a tool call based on OCR content, or
+    (b) the image was provided through a channel where the attacker
+        targets specific victims (e.g., support ticket screenshots),
+        turning it into a targeted attack.
+
+  Stage 1 enumeration: pattern is "request.files[*] or file path →
+  PIL.Image.open or cv2.imread → pytesseract.image_to_string /
+  easyocr.Reader.readtext / paddleocr.PaddleOCR / openai client.vision
+  / anthropic messages with image content → LLM prompt."
+
+  Related source_types to label separately:
+    - Vision model image_url path: cross_modal_direct_vision (not
+      OCR'd, sent as image data to a vision-capable model). Same
+      threat, different code pattern.
+    - PDF containing embedded images: overlaps with
+      indirect_file_upload when a PDF extractor runs OCR on embedded
+      images. Scanner should emit BOTH source_types for that case.

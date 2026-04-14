@@ -1,0 +1,75 @@
+fixture_id: pi_005
+category: prompt_injection
+source_type: multi_turn_orchestration
+verdict: positive
+expected_check_id: code-prompt-injection-risk
+expected_severity: high
+defense_present: []
+defense_score: 0
+adversarial_pair: ""
+source: synthetic
+source_url: ""
+source_commit: ""
+source_lines: ""
+license: synthetic
+labeled_by: claude+kkmookhey
+labeled_at: 2026-04-12
+reasoning: |
+  Multi-turn jailbreak enabling conditions. The "untrusted source" here
+  is not a single field — it is the *accumulated conversation history*
+  which the attacker controls turn by turn over many interactions.
+
+  The code violates every multi-turn defense principle:
+
+    1. System prompt declared once at session start with
+       "You are a helpful assistant." and NEVER re-asserted on subsequent
+       turns. As history grows, the model's attention drifts away from
+       the system constraint.
+
+    2. session["history"] grows unbounded. No max_turns, no token cap,
+       no sliding window, no conversation summarization. After 50 turns
+       the system prompt is buried under attacker-controlled context.
+
+    3. No per-turn re-sanitization. Each user message is appended raw.
+       A turn-3 message that included a payload remains in context forever.
+
+    4. No session TTL, no reset endpoint, no automatic timeout. Sessions
+       can persist across days, accumulating attack surface.
+
+    5. No rate limit per session. The "I'm a chemistry student →
+       tell me about reactions → tell me about energetic reactions →
+       tell me about TNT" gradient attack requires many turns. Per-session
+       rate limits make these gradient attacks impractical.
+
+    6. No anomaly detection on conversation drift. No code path that
+       checks topic stability, refusal-rate trend, or instruction-vs-data
+       ratio across turns.
+
+  Whitney's role here is explicit and bounded:
+    - Whitney FINDS the missing defenses (this fixture is a TP).
+    - Whitney does NOT find active attacks (that requires reading the
+      conversation, not the code — runtime guardrails problem).
+
+  The finding description should be explicit about this boundary so users
+  understand they need *both* code-level defenses AND runtime guardrails.
+
+  defense_present is empty. No max_turns logic, no system prompt
+  re-injection, no session.clear() call, no rate limiter, no anomaly
+  detector. defense_score = 0.
+
+  Severity high. Multi-turn attacks have demonstrably succeeded against
+  GPT-4 / Claude / Gemini in published red-team studies.
+
+  IMPORTANT NUANCE: this fixture is fundamentally different from pi_001
+  through pi_004 in that the "source" is not a syntactic location in the
+  code — it is the *shape* of the conversation orchestration loop. Stage 1
+  (Semgrep) needs a rule that matches "messages list grows unbounded
+  across requests" — that is a structural pattern, not a string match.
+  This will be the hardest Stage 1 rule to write in Phase B.
+
+  Adversarial pair (to add): same Flask + session pattern but with
+    - max_turns enforcement
+    - system prompt re-injected every turn
+    - session TTL via Flask's session.permanent = True with PERMANENT_SESSION_LIFETIME
+    - A guardrail call (Lakera or NeMo) on each user_msg
+  That combination would be a Tier-A TN for multi_turn_orchestration.
