@@ -3,7 +3,7 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "whitney-scanner"
+name = "whitney"
 version = "0.1.0"
 description = "Open-source static AI security scanner — prompt injection, broken LLM-as-judge, AI SBOM."
 readme = "README.md"

@@ -5,7 +5,7 @@
 Whitney is a curated [Semgrep](https://semgrep.dev) ruleset plus a thin Python wrapper plus an opt-in LLM-as-judge triage layer plus an AI dependency SBOM extractor. Zero custom SAST. Zero LLM calls in the default path. Python-only for now (TS/JS/Go on the roadmap).
 
 ```bash
-pip install whitney-scanner
+pip install whitney
 whitney scan ./your-repo
 ```
 
