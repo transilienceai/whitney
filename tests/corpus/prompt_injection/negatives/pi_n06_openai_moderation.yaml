@@ -1,0 +1,65 @@
+fixture_id: pi_n06
+category: prompt_injection
+source_type: direct_http
+vuln_subtype: DPI-1
+verdict: negative
+expected_check_id: code-prompt-injection-risk
+expected_severity: high
+defense_present:
+  - name: openai_moderation
+    recognized: true
+    description: "client.moderations.create(input=user_text) runs the OpenAI policy classifier on the input before the chat completion; HTTP 400 short-circuit on results[0].flagged"
+adversarial_construction: verbatim_tp_plus_synthetic_defense
+adversarial_pair: pi_001
+source: synthetic
+source_url: ""
+source_commit: ""
+source_lines: ""
+license: synthetic
+labeled_by: claude+kkmookhey
+labeled_at: 2026-04-25
+reasoning: |
+  Canonical OpenAI Moderation vendor TN. Closes the "OpenAI Moderation"
+  parity gap surfaced by test_recognized_vendors_have_tn_fixtures.
+
+  Defense analysis:
+    - RECOGNIZED: OpenAI Moderation is on the recognized-guardrail list.
+      The classifier covers OpenAI's published policy categories (hate,
+      self-harm, sexual, violence, and the harassment/illegal subcats).
+    - ORDERING: pre-call. moderations.create runs BEFORE
+      chat.completions.create. The HTTP 400 path skips the LLM
+      invocation entirely.
+    - REJECTION: HTTP 400 with explicit error body — not just logged.
+    - INPUT COVERAGE: the full user_text is passed verbatim to
+      moderations.create(input=user_text). Stage 3 LLM triage must
+      verify same-variable flow.
+
+  IMPORTANT NUANCE: OpenAI Moderation is a policy classifier, not a
+  prompt-injection-specific classifier. It blocks overt jailbreaks
+  containing violent role-play, illegal-content prompts, etc., but a
+  sophisticated prompt injection that stays within policy categories
+  can pass through. Whitney's defense ladder records Moderation as
+  recognised at a lower tier than dedicated PI guardrails (Bedrock
+  Guardrails with PROMPT_ATTACK filter, Azure Prompt Shields, Lakera).
+  Per the binary defense model in tests/corpus/README.md:88-128,
+  recognized=true is sufficient for TN regardless of tier — apps using
+  Moderation alone are at the bottom of the defense ladder, not
+  undefended.
+
+  Scanner Stage 1 recognition: prompt_injection_taint.yaml line 265-266
+  already lists `$CLIENT.moderations.create(...)` and
+  `openai.Moderation.create(...)` as sanitizers. The variable bind
+  `$CLIENT` resolves to `client`, the call shape matches, taint is
+  suppressed.
+
+  DEFERRED to Phase E: classify Moderation usage by tier so the
+  remediation message can suggest a stronger replacement when only
+  Moderation is present.
+
+  The two-fixture diff (pi_001 vs pi_n06):
+    pi_001 — direct f-string interpolation, no defense.
+    pi_n06 — same shape + 3 lines (moderations.create + early return
+             on flagged).
+
+  About 3 lines are the security delta. Authored synthetic to close
+  the README→TN parity gap. No public attribution available.

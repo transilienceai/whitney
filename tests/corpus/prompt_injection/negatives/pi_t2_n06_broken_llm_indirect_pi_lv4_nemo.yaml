@@ -1,0 +1,85 @@
+fixture_id: pi_t2_n06
+category: prompt_injection
+source_type: indirect_web_fetch
+vuln_subtype: IPI-2
+verdict: negative
+expected_check_id: code-prompt-injection-risk
+expected_severity: high
+defense_present:
+  - name: nemo_guardrails_runnable_composition
+    recognized: true
+    description: "load_nemo_guardrails() loads rails.yaml config; runnable composition `prompt_template | (guardrails | model)` causes every LLM invocation to pass through the rails' input and output policies BEFORE reaching the underlying model — the WebBaseLoader-fetched page content reaches the rails on the input side, not just the user's question"
+adversarial_construction: fully_real
+adversarial_pair: pi_t2_004
+source: github
+source_url: https://github.com/13o-bbr-bbq/Broken_LLM_Integration_App/blob/main/chatapp/backend/app/llm_agent.py
+source_commit: 90d3f955f9e024175dd01f37d55a1bf263d91013
+source_lines: indirect_pi_lv4 function (approx L168-L184)
+license: MIT
+labeled_by: claude+kkmookhey
+labeled_at: 2026-04-25
+reasoning: |
+  FULLY_REAL adversarial pair to pi_t2_004. Both halves of this pair
+  are verbatim from the same upstream source file (llm_agent.py in
+  13o-bbr-bbq/Broken_LLM_Integration_App), authored by the repo
+  maintainer as an explicit graduated-difficulty CTF. Same pattern as
+  pi_t2_003 ↔ pi_t2_n02; this completes the indirect_pi pair as
+  pi_t2_004 ↔ pi_t2_n06.
+
+  Defense analysis:
+    - RECOGNIZED: NeMo Guardrails is on the recognized-guardrail list.
+      load_nemo_guardrails() returns a RunnableRails that wraps the
+      LLM call with configured input and output rails from a YAML
+      config (`rails.yaml`). This is the canonical NeMo integration
+      pattern for LangChain.
+    - COMPOSITION: the pipe operator chain
+        prompt_template | (guardrails | model)
+      means every (page_content, question) → prompt_template →
+      guardrails → model. The rails ALWAYS run before the model.
+    - KEY POINT FOR INDIRECT INJECTION: unlike pi_t2_n02 (where the
+      only attacker input was `question`), the input to the chain
+      here ALSO includes `page_content` — the WebBaseLoader-fetched
+      bytes from an attacker-controlled URL. The rails see the full
+      composed prompt (template + page_content + question), so the
+      indirect-injection payload smuggled in page_content is
+      classifiable by the input rails. This is exactly the failure
+      mode the rails are designed to catch.
+    - REJECTION: NeMo Guardrails' default behavior on policy violation
+      is to short-circuit the chain and return a refusal message
+      rather than invoking the model.
+
+  The DEFERRED concern (same as pi_t2_n02): the actual rails.yaml
+  config is not shown in this fixture. A NeMo config with no input
+  rails defined would be a "pretend defense" that passes Phase A
+  recognition but fails real-world effectiveness. Phase E extends
+  to inspect rails.yaml content. For Phase A, "the composition
+  pattern is present and the indirect-injection input flows through
+  it" is sufficient for TN.
+
+  Verdict: negative. One recognized defense, binary rule fires TN.
+
+  The two-fixture diff (pi_t2_004 vs pi_t2_n06):
+    pi_t2_004:
+      llm_chain = LLMChain(prompt=prompt, llm=create_chat_openai_model())
+      answer = llm_chain.run(page_content=docs[0].page_content,
+                             question=question)
+    pi_t2_n06:
+      guardrails = load_nemo_guardrails()
+      model = create_chat_openai_model()
+      chain_with_guardrails = prompt_template | (guardrails | model)
+      answer = await chain_with_guardrails.ainvoke(
+          {"page_content": docs[0].page_content, "question": question}
+      )
+
+  About ~4 lines of code are the entire security delta. Stage 1 rule
+  recognition: the `pattern-not-inside` clauses in
+  prompt_injection_taint.yaml (LLMRails / load_nemo_guardrails / pipe
+  composition) should fire. The taint-mode sanitizer pattern
+  `load_nemo_guardrails(...)` already exists at line 260 of
+  prompt_injection_taint.yaml.
+
+  Attribution: verbatim function copy with explicit imports.
+  License MIT (allowlist), full provenance populated.
+
+  Closes the pi_t2_004 dangling-pair gap surfaced by the corpus
+  hygiene audit.

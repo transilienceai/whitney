@@ -12,7 +12,6 @@ defense_present:
   - name: bedrock_invoke_model_guardrail_params
     recognized: true
     description: "invoke_model called with guardrailIdentifier + guardrailVersion, causing Bedrock to apply the policy to both input and output"
-defense_score: 10
 adversarial_pair: pi_001
 source: synthetic
 source_url: ""

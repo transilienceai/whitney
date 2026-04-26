@@ -6,7 +6,7 @@ verdict: positive
 expected_check_id: code-prompt-injection-risk
 expected_severity: critical
 defense_present: []
-adversarial_pair: ""
+adversarial_pair: pi_t2_n06
 source: github
 source_url: https://github.com/13o-bbr-bbq/Broken_LLM_Integration_App/blob/main/chatapp/backend/app/llm_agent.py
 source_commit: 90d3f955f9e024175dd01f37d55a1bf263d91013

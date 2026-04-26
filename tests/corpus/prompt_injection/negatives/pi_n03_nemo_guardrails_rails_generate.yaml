@@ -9,7 +9,6 @@ defense_present:
   - name: nemo_guardrails_rails_generate
     recognized: true
     description: "nemoguardrails.LLMRails.generate() wraps LLM call with configured input rails; check_jailbreak and check_prompt_injection flows defined in rails.yaml block flagged inputs before model invocation"
-defense_score: 10
 adversarial_pair: pi_001
 source: synthetic
 source_url: ""

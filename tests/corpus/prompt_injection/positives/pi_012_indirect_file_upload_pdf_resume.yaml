@@ -6,7 +6,6 @@ verdict: positive
 expected_check_id: code-prompt-injection-risk
 expected_severity: critical
 defense_present: []
-defense_score: 0
 adversarial_pair: ""
 source: synthetic
 source_url: ""

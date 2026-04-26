@@ -28,6 +28,49 @@ REQUIRED_FIELDS: set[str] = {
     "license",
 }
 
+# Optional top-level fields that are valid in a sidecar but not required.
+# Any sidecar field outside REQUIRED_FIELDS ∪ OPTIONAL_FIELDS is schema drift
+# and is rejected by test_no_undocumented_top_level_sidecar_fields.
+OPTIONAL_FIELDS: frozenset[str] = frozenset({
+    "adversarial_pair",
+    "adversarial_construction",
+    "source_url",
+    "source_commit",
+    "source_lines",
+    "labeled_by",
+    "labeled_at",
+    "reasoning",
+})
+
+# The Phase A source-type taxonomy. Size of this set must match the
+# "N source types" claim in README.md / docs/SCANNER.md (enforced by
+# test_readme_source_type_count_matches_taxonomy in test_doc_integrity.py).
+# Update this constant when the taxonomy changes — the README claim follows
+# from it, not vice versa.
+KNOWN_SOURCE_TYPES: frozenset[str] = frozenset({
+    # Direct
+    "direct_http",
+    "direct_cli",
+    "direct_voice",
+    # Indirect — fetched
+    "indirect_rag",
+    "indirect_web_fetch",
+    "indirect_file_upload",
+    "indirect_email",
+    "indirect_search",
+    # Indirect — agent ecosystem
+    "indirect_tool_response",
+    "indirect_mcp",
+    "indirect_a2a",
+    # Indirect — stored
+    "indirect_db_stored",
+    "indirect_memory_stored",
+    # Cross-modal
+    "cross_modal_image_ocr",
+    "cross_modal_unicode",
+    "cross_modal_audio",
+})
+
 
 @dataclass
 class Fixture:

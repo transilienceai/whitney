@@ -1,0 +1,77 @@
+fixture_id: pi_n08
+category: prompt_injection
+source_type: indirect_tool_response
+vuln_subtype: IPI-4
+verdict: negative
+expected_check_id: code-prompt-injection-risk
+expected_severity: high
+defense_present:
+  - name: rebuff_detect_injection
+    recognized: true
+    description: "rb.detect_injection(snippets) runs the Rebuff (Protect AI) embedding-similarity + heuristics PI classifier on the Tavily search snippets BEFORE they loop back into the agent's next reasoning step; injection_detected=True returns a refusal string instead of the raw snippets"
+adversarial_construction: verbatim_tp_plus_synthetic_defense
+adversarial_pair: pi_006
+source: synthetic
+source_url: ""
+source_commit: ""
+source_lines: ""
+license: synthetic
+labeled_by: claude+kkmookhey
+labeled_at: 2026-04-25
+reasoning: |
+  Canonical Rebuff vendor TN, paired with pi_006. Closes the Rebuff
+  parity gap and demonstrates correct defense placement for
+  indirect_tool_response: the scanner runs on the TOOL OUTPUT (the
+  attacker-controllable side) rather than on the user query.
+
+  Defense analysis:
+    - RECOGNIZED: Rebuff (Protect AI Rebuff) is on the
+      recognized-guardrail list. The detect_injection method is a
+      composite classifier (heuristics + embedding-similarity vs a
+      curated jailbreak corpus + LLM-as-judge fallback).
+    - SCOPE / PLACEMENT: scanner runs INSIDE the tool function, on the
+      tool output, before the function returns. This is the correct
+      placement for indirect_tool_response — a Rebuff call on the user
+      `query` (e.g. wrapping executor.invoke) would miss the
+      SEO-poisoned search snippet that's the actual attack surface.
+    - REJECTION: explicit return of a refusal string when
+      injection_detected=True; the agent receives the refusal as the
+      tool output and continues with that text instead of the
+      attacker's payload.
+    - ORDERING: the scan happens before any LLM invocation that
+      consumes the tool output, because LangChain's AgentExecutor
+      always materialises the full tool return value before composing
+      the next prompt.
+
+  Scanner Stage 1 recognition: prompt_injection_taint.yaml now lists
+  three Rebuff sanitizer patterns (the Phase A B2 expansion):
+    - rebuff.detect_injection(...)         # module-level
+    - $REBUFF.detect_injection(...)        # instance via metavar
+    - rb.detect_injection(...)             # common short alias
+  This fixture uses the rb.detect_injection(...) shape, which is the
+  realistic SDK pattern (Rebuff exposes the API only through an
+  instance constructed with api_token + api_url).
+
+  WHY THE B2 EXPANSION WAS NECESSARY: the previous single sanitizer
+  pattern `rebuff.detect_injection(...)` only matched module-level
+  calls. Real Rebuff usage requires constructing a `Rebuff(api_token=
+  ..., api_url=...)` instance and calling .detect_injection on the
+  instance, which the original pattern did not recognize.
+
+  DEFERRED to Phase E: validate Rebuff is reachable / api_token is not
+  a dev placeholder. A Rebuff client constructed with a known-bad
+  token would fail open silently.
+
+  The two-fixture diff (pi_006 vs pi_n08):
+    pi_006 — tool returns raw snippets, agent loops them back unfiltered.
+    pi_n08 — same + Rebuff client init + detect_injection inside the
+             tool + early-return refusal on injection_detected.
+
+  About 5 lines are the security delta — but the placement matters
+  more than the line count. Putting Rebuff on the wrong side of the
+  trust boundary (e.g., wrapping the user `query` instead of the tool
+  output) would produce a fixture that passes Stage 1 recognition but
+  is operationally broken.
+
+  Authored synthetic to close the README→TN parity gap for the
+  indirect_tool_response source_type.

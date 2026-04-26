@@ -12,7 +12,6 @@ defense_present:
   - name: pydantic_length_cap
     recognized: false
     description: "SummarizeRequest max_length=2000 — bypassable; most injection payloads fit in <100 chars"
-defense_score: 0
 adversarial_pair: pi_001
 source: synthetic
 source_url: ""
