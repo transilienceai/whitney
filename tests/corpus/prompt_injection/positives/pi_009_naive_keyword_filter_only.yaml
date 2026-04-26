@@ -9,7 +9,6 @@ defense_present:
   - name: naive_keyword_filter
     recognized: false
     description: "Substring blocklist of 6 common injection phrases (case-insensitive). Trivially bypassable via case variation, encoding, language switching, paraphrase, or token splitting."
-defense_score: 0
 adversarial_pair: ""
 source: synthetic
 source_url: ""

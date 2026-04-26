@@ -1,0 +1,88 @@
+fixture_id: pi_n09
+category: prompt_injection
+source_type: direct_http
+vuln_subtype: DPI-1
+verdict: negative
+expected_check_id: code-prompt-injection-risk
+expected_severity: high
+defense_present:
+  - name: guardrails_ai_detect_prompt_injection
+    recognized: true
+    description: "Guard.from_pydantic(SummarizeRequest).parse(request.json) runs the validator chain including the model-backed DetectPromptInjection validator with on_fail='exception'; raises if any validator rejects, HTTP 400 short-circuit before openai call"
+adversarial_construction: verbatim_tp_plus_synthetic_defense
+adversarial_pair: pi_010
+source: synthetic
+source_url: ""
+source_commit: ""
+source_lines: ""
+license: synthetic
+labeled_by: claude+kkmookhey
+labeled_at: 2026-04-25
+reasoning: |
+  Canonical Guardrails AI vendor TN, paired with pi_010. Closes the
+  Guardrails AI parity gap. Specifically demonstrates the
+  recognized-tier configuration: a Guard with the model-backed
+  DetectPromptInjection validator attached, NOT just structural
+  validators (length, regex, type).
+
+  Defense analysis:
+    - RECOGNIZED: Guardrails AI is on the recognized-guardrail list,
+      conditional on the validator chain containing a PI-aware validator.
+      DetectPromptInjection (from guardrails.hub) is a model-backed
+      validator that classifies the input via a fine-tuned LLM.
+    - ORDERING: pre-call. guard.parse runs BEFORE
+      chat.completions.create. The except path skips the LLM
+      invocation entirely.
+    - REJECTION: on_fail="exception" raises on any validator failure;
+      the except branch returns HTTP 400 with explicit error body —
+      not just logged.
+    - INPUT COVERAGE: guard.parse receives request.json, which contains
+      the user's text. Stage 3 LLM triage must verify the same
+      variable that flows to the LLM also flows through the validated
+      output (validated.validated_output['text'], not raw
+      request.json).
+
+  CRITICAL DISTINCTION FROM pi_010 (the existing TP): pi_010 uses a
+  Pydantic regex pattern (`pattern=r"^[\w\s.,!?'\-]+$"`) which is on
+  the explicitly-NOT-sufficient list (corpus README:115-119). Bypasses
+  by Unicode, homoglyphs, Base64. Whitney correctly flags pi_010 as TP
+  even though it has "validation."
+  pi_n09 replaces the regex with DetectPromptInjection — a model-backed
+  validator that doesn't bypass the way regex does. The key learning
+  for the scanner: NOT all "input validation" is created equal.
+  Recognised-tier validation requires the model-backed validator, not
+  just a regex.
+
+  Scanner Stage 1 recognition: prompt_injection_taint.yaml now lists
+  three Guardrails AI sanitizer patterns (the Phase A B2 expansion):
+    - $GUARD.validate(...)                        # generic
+    - $GUARD.parse(...)                           # documented blocking call
+    - Guard.from_pydantic(...).parse(...)         # full chain
+  This fixture uses guard.parse(request.json) which matches
+  $GUARD.parse(...).
+
+  WHY THE B2 EXPANSION WAS NECESSARY: the previous single sanitizer
+  pattern `$GUARD.validate(...)` would only match a .validate() call.
+  The actual documented blocking method in the modern Guardrails AI
+  SDK is .parse(), not .validate(). The original rule pattern would
+  have produced a false positive on this realistic fixture.
+
+  DEFERRED to Phase E: validate the validator chain attached to the
+  Guard actually contains a PI-aware validator (DetectPromptInjection,
+  ProvenanceLLM with PI training, BanSubstrings configured against
+  jailbreak phrases). A Guard with only structural validators
+  (length/regex/type) is NOT a recognized defense — it would belong
+  with pi_010 as TP, not here as TN.
+
+  The two-fixture diff (pi_010 vs pi_n09):
+    pi_010 — Pydantic regex pattern, weak validation, Whitney TP.
+    pi_n09 — Guard.from_pydantic with DetectPromptInjection validator,
+             on_fail=exception, recognized defense, Whitney TN.
+
+  About 6 lines are the security delta. The conceptual delta is much
+  larger: weak structural validation vs model-backed PI classification.
+
+  Authored synthetic to close the README→TN parity gap and to provide
+  a defended counterpart to pi_010 specifically (which currently has
+  no paired TN since Pydantic-strict regex is itself the
+  defense-being-rejected pattern).

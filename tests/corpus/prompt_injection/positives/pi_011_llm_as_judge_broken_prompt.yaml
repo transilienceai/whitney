@@ -9,7 +9,6 @@ defense_present:
   - name: llm_as_judge_broken_prompt
     recognized: false
     description: "Secondary LLM call, but the judge prompt is 'is this text bad? yes/no' — no variant enumeration, no structured output, no rejection bias. Misses Unicode, homoglyphs, encoding, paraphrase, role-play attacks."
-defense_score: 0
 adversarial_pair: pi_n04
 source: synthetic
 source_url: ""

@@ -19,7 +19,7 @@ high      app/rag.py                                                 :55    WebB
 
 ## What it finds
 
-Prompt injection across **15 source types**:
+Prompt injection across **16 source types**:
 
 | Class | Source types covered |
 |---|---|
@@ -45,20 +45,23 @@ The commodity static AI rulesets (Semgrep `p/ai-best-practices`, Bandit, Agent A
 | Agent Audit 0.18.2 | 0.308 | 0.571 | 0.400 | — |
 | Bandit / Semgrep `p/security-audit` | 0.000 | — | — | 0 |
 
-The corpus is **35 hand-labelled fixtures** (26 positives + 9 negatives) spanning all 15 source types, shipped in `tests/corpus/`. Every fixture has a YAML sidecar with `source_url`, `source_commit`, `vuln_subtype`, and labelling rationale. Reproduce locally with `python -m tests.corpus.eval`.
+The corpus is **41 hand-labelled fixtures** (26 positives + 15 negatives) spanning 15 of 16 source types (cross_modal_audio target deferred), shipped in `tests/corpus/`. Every fixture has a YAML sidecar with `source_url`, `source_commit`, `vuln_subtype`, and labelling rationale. Reproduce locally with `python -m tests.corpus.eval`.
 
 On **5 blind-test repositories** that were never used to develop the rules — `aimaster-dev/chatbot-using-rag-and-langchain`, `Lizhecheng02/RAG-ChatBot`, `SachinSamuel01/rag-langchain-streamlit`, `streamlit/example-app-langchain-rag`, `Vigneshmaradiya/ai-agent-comparison` — Whitney produces 11 findings, of which 9 are true positives and 2 are false positives in developer `main()` test harnesses. **81.8% precision, hand-audited.** Full audit table in `tests/corpus/DIFFERENTIAL.md`.
 
 ## Recognised defences
 
-Whitney suppresses findings only when a **vendor guardrail** or **correct LLM-as-judge** is called on the untrusted content before it reaches the LLM:
+Whitney suppresses findings only when a **vendor guardrail** or **correct LLM-as-judge** is called on the untrusted content before it reaches the LLM. Each entry below has at least one TN fixture in `tests/corpus/prompt_injection/negatives/`; `tests/corpus/test_doc_integrity.py::test_recognized_vendors_have_tn_fixtures` enforces the parity in CI.
 
 - AWS Bedrock Guardrails (`apply_guardrail`, `GuardrailIdentifier=` on `invoke_model`)
 - Azure AI Content Safety / Prompt Shields (`ContentSafetyClient.detect_jailbreak`)
 - Lakera Guard (`api.lakera.ai` or SDK calls)
-- NeMo Guardrails (`LLMRails.generate`, wrapping-style)
+- NeMo Guardrails (`LLMRails.generate`, wrapping-style, runnable composition `prompt | (rails | model)`)
 - DeepKeep AI firewall (`dk_request_filter`)
 - OpenAI Moderation (`client.moderations.create`)
+- LLM-Guard (`llm_guard.scan_prompt` with `PromptInjection` input scanner)
+- Rebuff / Protect AI Rebuff (`rebuff.detect_injection`, instance-method `rb.detect_injection`)
+- Guardrails AI (`Guard.from_pydantic(...).parse(...)` with model-backed validators like `DetectPromptInjection`)
 - Correct LLM-as-judge (classified via the opt-in triage layer — see [`docs/TRIAGE.md`](docs/TRIAGE.md))
 
 Weak defences are **explicitly not counted**: regex/Pydantic string validation, length caps, keyword blocklists, system-prompt admonitions. All bypassable via Unicode, homoglyphs, Base64, language switching, or paraphrase. Whitney still records their presence in `details["defense_present"]` so remediation messages can point the developer at a stronger replacement.

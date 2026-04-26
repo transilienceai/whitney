@@ -9,7 +9,6 @@ defense_present:
   - name: llm_as_judge_prompt_injection_detector
     recognized: true
     description: "Secondary LLM call with system prompt explicitly enumerating 10+ injection variants (Unicode, homoglyphs, encoding, language, paraphrase, role-play, smuggling, token-split, gradient, system-leak); structured JSON output; reject on positive"
-defense_score: 10
 adversarial_pair: pi_011
 source: synthetic
 source_url: ""

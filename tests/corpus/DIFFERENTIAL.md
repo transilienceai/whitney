@@ -1,15 +1,16 @@
 # Whitney Corpus — Differential Testing Results (Phase A.3 + Rebuild)
 
-**Corpus**: 35 fixtures, 26 positives + 9 negatives, 15 source types
-**Last measured**: 2026-04-13
+**Corpus**: 41 fixtures, 26 positives + 15 negatives, 15 of 16 source types covered
+**Last measured**: 2026-04-25 (post Phase-A defense-recognition completion: pi_t2_n06 + 5 vendor TNs landed; rule expanded with `pattern-not-inside` clauses for Azure / OpenAI Moderation / LLM-Guard / Rebuff / GuardrailsAI)
 **Whitney scanner**: Post-rebuild (4-file Semgrep ruleset + opt-in LLM-as-judge triage)
 
 ## TL;DR — HONEST, FINAL
 
 | Scanner | Type | Recall | Precision | F1 | FP Rate | Notes |
 |---|---|---|---|---|---|---|
-| **Whitney (Phase D triage on)** | Semgrep rules + opt-in LLM-as-judge classifier | **1.000** | **1.000** | **1.000** | **0.000** | Beats every tested scanner on every metric. Opt-in path (`WHITNEY_STRICT_JUDGE_PROMPTS=1`) — default mode has zero LLM calls |
-| **Whitney (default, no triage)** | Semgrep rules only | **1.000** | 0.897 | **0.945** | 0.333 | 3 remaining FPs are guard-style LLM-as-judge correctness cases (Phase D closes these) |
+| **Whitney (Phase D triage on)** | Semgrep rules + opt-in LLM-as-judge classifier | **1.000** | **1.000** | **1.000** | **0.000** | 26/0/0/15 (was 26/0/0/9 pre-defense-completion). Beats every tested scanner on every metric. Opt-in path (`WHITNEY_STRICT_JUDGE_PROMPTS=1`) — default mode has zero LLM calls |
+| **Whitney (default, no triage)** | Semgrep rules only | **1.000** | 0.897 | **0.945** | **0.200** | 26/3/0/12 (was 26/3/0/6). The 3 remaining FPs are the documented LLM-as-judge correctness cases (pi_n04, pi_t2_n04, pi_t2_n05); triage mode flips them to TN. fp_rate dropped from 0.333 → 0.200 because the 6 new TNs grew the denominator. |
+| ~~**Whitney (default, no triage) — pre-defense-completion baseline**~~ | ~~Semgrep rules only~~ | ~~**1.000**~~ | ~~0.897~~ | ~~**0.945**~~ | ~~0.333~~ | ~~3 remaining FPs are guard-style LLM-as-judge correctness cases (Phase D closes these). 26/3/0/6.~~ |
 | Whitney Phase C alpha (pre-wipe) | static rules + file-level heuristic | 0.962 | 1.000 | 0.981 | 0.000 | Historical baseline from before the rebuild. Missed pi_011 (broken judge) as FN. |
 | Whitney Phase B v1 (pre-rebuild) | static AST+regex | 0.846 | 0.733 | 0.786 | 0.889 | Initial Phase B rule lift |
 | Semgrep `p/ai-best-practices` | static (taint engine) | 0.500 | 0.867 | 0.634 | 0.222 | One rule: `openai-missing-moderation` |
@@ -76,7 +77,7 @@ These are real competitors. The claim of "zero commodity coverage" was wrong.
 Whitney's actual story, post-honest-benchmarking:
 
 - **Highest recall** of any static AI-security scanner tested (84.6% vs 50% Semgrep vs 30.8% Agent Audit).
-- **Broadest source-type coverage** (15 source types vs ~3 across all competitors combined).
+- **Broadest source-type coverage** (15 of 16 source types covered, vs ~3 across all competitors combined).
 - **Uniquely catches 5 source types** that neither competitor covers (see "Whitney-unique TPs" below).
 - **Precision is the open problem.** Whitney's 88.9% FP rate is worse than both competitors. Phase C data flow is designed to close this gap.
 - **Defense recognition is a design moat, not yet a shipped capability.** Whitney Phase B v1 flags defended variants because Stage 1 rules are broad. Phase C is where defense recognition actually shows up in the numbers.

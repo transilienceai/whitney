@@ -1,0 +1,65 @@
+fixture_id: pi_n07
+category: prompt_injection
+source_type: indirect_rag
+vuln_subtype: IPI-1
+verdict: negative
+expected_check_id: code-prompt-injection-risk
+expected_severity: critical
+defense_present:
+  - name: llm_guard_scan_prompt
+    recognized: true
+    description: "llm_guard.scan_prompt([PromptInjection()], prompt) runs the LLM-Guard PromptInjection input scanner on the fully-composed prompt (RAG context included); rejects if any scanner returns valid=False"
+adversarial_construction: verbatim_tp_plus_synthetic_defense
+adversarial_pair: pi_002
+source: synthetic
+source_url: ""
+source_commit: ""
+source_lines: ""
+license: synthetic
+labeled_by: claude+kkmookhey
+labeled_at: 2026-04-25
+reasoning: |
+  Canonical LLM-Guard vendor TN, paired with the pi_002 RAG TP. Closes
+  the LLM-Guard parity gap and adds an indirect-injection TN to the
+  defense-recognition coverage (the existing TNs are mostly direct_http).
+
+  Defense analysis:
+    - RECOGNIZED: LLM-Guard is on the recognized-guardrail list. The
+      PromptInjection input scanner is a dedicated PI classifier
+      (built on a deBERTa fine-tuned for prompt-injection detection).
+    - SCOPE: scan_prompt receives the FULLY COMPOSED prompt
+      (`Answer the question using only this context:\n\n{context}\n\n
+      Question: {question}`), so the untrusted RAG `context` is in
+      scope — not just the user `question`. This is critical for
+      indirect injection: a defense that only scans the user's
+      question would miss payloads planted in retrieved chunks.
+    - ORDERING: pre-call. scan_prompt runs before
+      chat.completions.create.
+    - REJECTION: explicit return of a refusal string when any scanner
+      returns valid=False; the LLM is never invoked.
+
+  Scanner Stage 1 recognition: prompt_injection_taint.yaml line 272
+  lists `llm_guard.scan_prompt(...)` as a sanitizer. The call shape
+  matches, taint is suppressed.
+
+  IMPORTANT — sanitized_prompt vs prompt: LLM-Guard's scan_prompt
+  returns a (sanitized, valid, score) triple. The sanitized variant
+  may have transformations applied (anonymisation, redaction). This
+  fixture passes `sanitized_prompt` (not the raw `prompt`) to the LLM,
+  which is the recommended pattern — taint flows from RAG context to
+  scan_prompt to sanitized_prompt to the LLM, with scan_prompt acting
+  as the sanitizer in the taint chain.
+
+  DEFERRED to Phase E: validate the input_scanners list actually
+  contains a prompt-injection scanner (PromptInjection, BanSubstrings
+  configured for jailbreak phrases, Toxicity, etc.). A scan_prompt
+  call with an empty scanners list is a "pretend defense" — Phase E
+  Stage 3 will verify the scanner composition.
+
+  The two-fixture diff (pi_002 vs pi_n07):
+    pi_002 — RAG → f-string → openai, no defense.
+    pi_n07 — same + scanner setup + scan_prompt + early-return path
+             + use of sanitized_prompt.
+
+  About 5 lines are the security delta. Authored synthetic to close
+  the README→TN parity gap for an indirect-injection source_type.

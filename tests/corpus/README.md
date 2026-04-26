@@ -72,7 +72,7 @@ giving us granular eval breakdowns.
 guardrail validation: if every input AND every output is validated by a
 recognized guardrail, multi-turn gradient attacks get caught per-turn
 regardless of conversation shape. Fixture `pi_005_multi_turn_unbounded_history`
-moved to `_deferred/dropped_multi_turn/`. Final source count: **15 source_types**.
+moved to `_deferred/dropped_multi_turn/`. Final source count: **16 source_types**.
 
 ### Defense recognition — binary model
 
@@ -87,14 +87,20 @@ The scanner's job for prompt injection reduces to two criteria:
 
 **Recognized guardrails (the only things that count):**
 
-*Vendor APIs:*
-- AWS Bedrock Guardrails (`apply_guardrail`, `GuardrailIdentifier=` + `GuardrailVersion=` params on `invoke_model*`, LangChain `BedrockLLM(guardrails=...)`)
-- Azure AI Content Safety / Prompt Shields (`azure.ai.contentsafety.ContentSafetyClient.detect_jailbreak` / `analyze_text`)
-- Lakera Guard (`api.lakera.ai/v1/*`, `lakera_client.*`, `lakera_chainguard`)
-- NeMo Guardrails (`nemoguardrails.LLMRails`, `rails.generate`)
-- OpenAI Moderation (`client.moderations.create`)
-- Anthropic content filters (Bedrock-hosted)
-- Prompt Armor, Rebuff, GuardrailsAI, LLM-Guard, Confident AI, DeepEval guards, Pangea AI Guard, Protect AI Rebuff
+*Vendor APIs:* Each entry below has at least one TN fixture and a sanitizer/`pattern-not-inside` clause in `whitney/rules/prompt_injection_taint.yaml`. The `test_recognized_vendors_have_tn_fixtures` doc-integrity test enforces this parity — adding a vendor here without authoring a TN fixture will fail CI.
+
+- AWS Bedrock Guardrails (`apply_guardrail`, `GuardrailIdentifier=` + `GuardrailVersion=` params on `invoke_model*`, LangChain `BedrockLLM(guardrails=...)`) — TN fixtures: pi_n01, pi_t2_n01.
+- Azure AI Content Safety / Prompt Shields (`azure.ai.contentsafety.ContentSafetyClient.detect_jailbreak` / `analyze_text`) — TN fixture: pi_n05.
+- Lakera Guard (`api.lakera.ai/v1/*`, `lakera_client.*`, `lakera_chainguard`) — TN fixture: pi_n02.
+- NeMo Guardrails (`nemoguardrails.LLMRails`, `rails.generate`, runnable composition `prompt | (rails | model)`) — TN fixtures: pi_n03, pi_t2_n02, pi_t2_n06.
+- OpenAI Moderation (`client.moderations.create`) — TN fixture: pi_n06.
+- DeepKeep AI firewall (`dk_request_filter`, `dk_response_filter`) — TN fixture: pi_t2_n03.
+- LLM-Guard (`llm_guard.scan_prompt` with PromptInjection input scanner) — TN fixture: pi_n07.
+- Rebuff / Protect AI Rebuff (`rebuff.detect_injection`, instance-method `rb.detect_injection`) — TN fixture: pi_n08.
+- Guardrails AI (`Guard.from_pydantic(...).parse(...)` with model-backed validators like `DetectPromptInjection`) — TN fixture: pi_n09.
+- Anthropic content filters (Bedrock-hosted) — subsumed under AWS Bedrock Guardrails.
+
+**Vendors deliberately NOT on this list** (claimed in earlier README revisions; dropped per CLAUDE.md "default to honesty" because they either have no usable atomic block-on-prompt-injection primitive in their public SDK, lack significant production adoption, or both): Prompt Armor, Confident AI, DeepEval guards, Pangea AI Guard. If any of these ships a usable primitive in a future release, re-add it AND author a TN fixture in the same change so the doc-integrity test stays green.
 
 *LLM-as-judge:* an explicit secondary LLM call that takes the untrusted
 content as input and classifies it ("is this prompt injection?") before
@@ -206,7 +212,7 @@ Every `.py` fixture has a sibling `.yaml` sidecar with this exact schema:
 ```yaml
 fixture_id: pi_002                       # short stable id, unique per category
 category: prompt_injection
-source_type: indirect_rag                # one of the 15 source_types
+source_type: indirect_rag                # one of the 16 source_types
 vuln_subtype: IPI-1                      # DPI-*/IPI-*/SPE-*/UOH-*/IIV-*
 verdict: positive                        # positive | negative
 expected_check_id: code-prompt-injection-risk

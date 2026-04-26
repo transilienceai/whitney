@@ -1,0 +1,62 @@
+fixture_id: pi_n05
+category: prompt_injection
+source_type: direct_http
+vuln_subtype: DPI-1
+verdict: negative
+expected_check_id: code-prompt-injection-risk
+expected_severity: high
+defense_present:
+  - name: azure_prompt_shields
+    recognized: true
+    description: "content_safety_client.detect_jailbreak(text=user_text) runs Microsoft's Prompt Shield jailbreak classifier on the input before the openai call; HTTP 400 short-circuit on detected=True"
+adversarial_construction: verbatim_tp_plus_synthetic_defense
+adversarial_pair: pi_001
+source: synthetic
+source_url: ""
+source_commit: ""
+source_lines: ""
+license: synthetic
+labeled_by: claude+kkmookhey
+labeled_at: 2026-04-25
+reasoning: |
+  Canonical Azure vendor-guardrail TN. Closes the
+  "Azure AI Content Safety / Prompt Shields" parity gap surfaced by
+  test_recognized_vendors_have_tn_fixtures.
+
+  Defense analysis:
+    - RECOGNIZED: Azure AI Content Safety / Prompt Shields is on the
+      recognized-guardrail list. Microsoft's Prompt Shield is a
+      managed model trained against a documented jailbreak corpus
+      (DAN, role-play, encoding, language-switch, instruction smuggling).
+      Returning detected=True flags the input as a likely prompt-injection
+      attempt.
+    - ORDERING: pre-call. detect_jailbreak runs BEFORE
+      client.chat.completions.create. The HTTP 400 path skips the LLM
+      invocation entirely.
+    - REJECTION: HTTP 400 with explicit error body — not just logged.
+    - INPUT COVERAGE: the full user_text is passed verbatim to
+      detect_jailbreak(text=user_text). Stage 3 LLM triage must verify
+      the same variable that flows to the LLM also flows to the shield.
+
+  Scanner Stage 1 recognition: prompt_injection_taint.yaml line 248
+  already lists `$AZURE.detect_jailbreak(...)` as a sanitizer. The
+  variable bind `$AZURE` resolves to `content_safety_client`, the call
+  shape matches, taint is suppressed.
+
+  DEFERRED to Phase E (mirrors pi_n01 reasoning): validate the Azure
+  resource's content-safety configuration actually has the prompt-attack
+  category enabled. A deployment with only PII or self-harm filters
+  enabled would pass Phase A recognition but fail in production.
+
+  The two-fixture diff (pi_001 vs pi_n05):
+    pi_001 — direct f-string interpolation, no defense.
+    pi_n05 — same shape + 4 lines (client init + detect_jailbreak +
+             early return on detected).
+
+  About 4 lines are the entire security delta, exactly the kind of
+  small-but-load-bearing distinction the scanner is trained to make.
+
+  Authored synthetic to close the README→TN parity gap for
+  Phase A's defense-recognition completeness milestone. No public
+  attribution available; full provenance fields blank per Tier 1
+  convention.

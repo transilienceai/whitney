@@ -6,7 +6,7 @@ Whitney's code scanner is a curated Semgrep ruleset plus a thin Python wrapper p
 
 ## What it finds
 
-Prompt injection across 15 source types:
+Prompt injection across 16 source types:
 
 | Class | Source types covered |
 |---|---|
@@ -67,7 +67,7 @@ See [`docs/TRIAGE.md`](../../../docs/TRIAGE.md) for operator instructions, cost 
 
 ## Benchmark
 
-Whitney is evaluated against a labelled corpus of 35 fixtures (26 positives + 9 negatives) spanning all 15 source types, and against 6 real-world AI app repositories (3 deliberately vulnerable, 3 Tier 2c real-world apps). See [`tests/test_whitney/corpus/DIFFERENTIAL.md`](../../../tests/test_whitney/corpus/DIFFERENTIAL.md) for the full scoreboard.
+Whitney is evaluated against a labelled corpus of 41 fixtures (26 positives + 15 negatives) spanning 15 of 16 source types, and against 6 real-world AI app repositories (3 deliberately vulnerable, 3 Tier 2c real-world apps). See [`tests/test_whitney/corpus/DIFFERENTIAL.md`](../../../tests/test_whitney/corpus/DIFFERENTIAL.md) for the full scoreboard.
 
 **Headline numbers** (2026-04-13):
 

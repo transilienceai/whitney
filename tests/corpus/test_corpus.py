@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from tests.test_whitney.corpus.loader import (
+from tests.corpus.loader import (
     CORPUS_ROOT,
     load_allowed_licenses,
     load_corpus,

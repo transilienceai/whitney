@@ -9,7 +9,6 @@ defense_present:
   - name: lakera_guard
     recognized: true
     description: "POST to api.lakera.ai/v1/prompt_injection on user input BEFORE main LLM call; rejects flagged inputs at the boundary with HTTP 400"
-defense_score: 10
 adversarial_pair: pi_001
 source: synthetic
 source_url: ""
