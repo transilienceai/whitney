@@ -90,6 +90,13 @@ def _print_table(findings: list[Any]) -> None:
     print(f"{len(findings)} finding(s).")
 
 
+def _write_html(path: Path, content: str) -> None:
+    """Write HTML to *path*, creating parent dirs as needed. Overwrites
+    without prompting (CI-friendly)."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+
+
 def _cmd_scan(args: argparse.Namespace) -> int:
     target = Path(args.path)
     if not target.exists():
@@ -113,6 +120,17 @@ def _cmd_scan(args: argparse.Namespace) -> int:
             <= threshold
         ]
 
+    if args.html:
+        from whitney.html_report import render_scan_html
+
+        html_path = Path(args.html)
+        _write_html(html_path, render_scan_html(findings, target))
+        print(
+            f"HTML report written to {html_path} "
+            f"({len(findings)} finding{'' if len(findings) == 1 else 's'})",
+            file=sys.stderr,
+        )
+
     if args.json:
         out = [_finding_to_dict(f) for f in findings]
         # Coerce enums to strings
@@ -122,7 +140,10 @@ def _cmd_scan(args: argparse.Namespace) -> int:
                     d[k] = v.value
         json.dump(out, sys.stdout, indent=2, default=str)
         print()
-    else:
+    elif not args.html:
+        # Default to table only when neither --html nor --json was set;
+        # if --html is set without --json, suppress the table to keep
+        # stdout clean for redirect-friendly use.
         _print_table(findings)
 
     # Non-zero exit code if findings exist (CI-friendly).
@@ -130,7 +151,7 @@ def _cmd_scan(args: argparse.Namespace) -> int:
 
 
 def _cmd_sbom(args: argparse.Namespace) -> int:
-    from whitney.sbom import scan_ai_sbom_code_only
+    from whitney.sbom import enrich_with_osv, scan_ai_sbom_code_only
 
     target = Path(args.path)
     if not target.exists():
@@ -138,11 +159,38 @@ def _cmd_sbom(args: argparse.Namespace) -> int:
         return 2
 
     sbom = scan_ai_sbom_code_only(target)
+    if args.enrich:
+        print("Enriching SBOM via OSV.dev...", file=sys.stderr)
+        sbom = enrich_with_osv(sbom)
+        n_v = len(sbom.get("vulnerabilities", []))
+        print(
+            f"  {n_v} vulnerabilit{'y' if n_v == 1 else 'ies'} after enrichment.",
+            file=sys.stderr,
+        )
+
+    if args.html:
+        from whitney.html_report import render_sbom_html
+
+        html_path = Path(args.html)
+        _write_html(html_path, render_sbom_html(sbom))
+        print(
+            f"HTML SBOM written to {html_path} "
+            f"({len(sbom.get('components', []))} components, "
+            f"{len(sbom.get('vulnerabilities', []))} vulns)",
+            file=sys.stderr,
+        )
+
     output_path = Path(args.output) if args.output else None
     if output_path:
         output_path.write_text(json.dumps(sbom, indent=2), encoding="utf-8")
-        print(f"SBOM written to {output_path} ({len(sbom.get('components', []))} components)")
-    else:
+        print(
+            f"SBOM JSON written to {output_path} "
+            f"({len(sbom.get('components', []))} components)",
+            file=sys.stderr,
+        )
+    elif not args.html:
+        # Stream JSON to stdout only when neither --output nor --html
+        # was given (the default behaviour pre-v0.2).
         json.dump(sbom, sys.stdout, indent=2)
         print()
     return 0
@@ -164,6 +212,14 @@ def main(argv: list[str] | None = None) -> int:
     p_scan.add_argument("path", help="Directory or file to scan.")
     p_scan.add_argument("--json", action="store_true", help="Output JSON instead of a table.")
     p_scan.add_argument(
+        "--html",
+        metavar="PATH",
+        help=(
+            "Write a self-contained HTML report to this path. "
+            "Suppresses the default table output unless --json is also set."
+        ),
+    )
+    p_scan.add_argument(
         "--severity",
         choices=["critical", "high", "medium", "low", "info"],
         help="Only show findings at or above this severity.",
@@ -173,6 +229,22 @@ def main(argv: list[str] | None = None) -> int:
     p_sbom = sub.add_parser("sbom", help="Generate an AI dependency SBOM.")
     p_sbom.add_argument("path", help="Directory to scan.")
     p_sbom.add_argument("--output", "-o", help="Write CycloneDX JSON to this file.")
+    p_sbom.add_argument(
+        "--html",
+        metavar="PATH",
+        help=(
+            "Write a self-contained HTML SBOM report to this path. "
+            "Suppresses the default JSON-to-stdout unless --output is set."
+        ),
+    )
+    p_sbom.add_argument(
+        "--enrich",
+        action="store_true",
+        help=(
+            "Cross-reference SDK components against the OSV.dev "
+            "vulnerability database. Network call, results cached daily."
+        ),
+    )
     p_sbom.set_defaults(func=_cmd_sbom)
 
     p_ver = sub.add_parser("version", help="Print Whitney version.")

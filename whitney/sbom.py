@@ -517,3 +517,233 @@ def scan_ai_sbom_code_only(repo_path: str | Path) -> dict:
     return generate_ai_sbom(components, account_id="code-scan", vulnerabilities=vulns)
 
 
+# ---------------------------------------------------------------------------
+# Optional OSV.dev CVE enrichment (--enrich)
+#
+# Cross-references each SDK component against the public OSV.dev database
+# and folds matching vulnerabilities into the SBOM's `vulnerabilities` list.
+# Built-in `VULNERABLE_SDK_VERSIONS` matches are NOT replaced — both sources
+# contribute, deduped by CVE/GHSA ID.
+#
+# Design constraints (per docs/superpowers/specs/2026-04-26-html-reports-design.md):
+# - Stdlib only — uses `urllib.request`, no `requests` dependency.
+# - Cached to ~/.whitney/osv_cache.json, keyed by (ecosystem, name, version,
+#   query_date) so re-runs same day are free.
+# - Concurrency cap: ThreadPoolExecutor max_workers=8.
+# - Per-run query cap: MAX_OSV_QUERIES_PER_RUN to bound network behaviour.
+# - Fail-open on any error — render the SBOM with what we have.
+# ---------------------------------------------------------------------------
+
+import json as _json_osv
+import logging as _logging_osv
+import urllib.error as _urlerror
+import urllib.request as _urlreq
+from concurrent.futures import ThreadPoolExecutor as _Pool, as_completed as _as_completed
+from datetime import date as _date
+
+_log = _logging_osv.getLogger(__name__)
+
+OSV_QUERY_URL = "https://api.osv.dev/v1/query"
+OSV_TIMEOUT_SECONDS = 10
+OSV_CACHE_FILE = Path.home() / ".whitney" / "osv_cache.json"
+MAX_OSV_QUERIES_PER_RUN = 200
+
+# Map Whitney's internal ecosystem labels to OSV's expected names.
+_OSV_ECOSYSTEM: dict[str, str] = {
+    "pypi": "PyPI",
+    "npm": "npm",
+}
+
+
+def _osv_cache_load() -> dict:
+    try:
+        return _json_osv.loads(OSV_CACHE_FILE.read_text(encoding="utf-8"))
+    except (OSError, _json_osv.JSONDecodeError):
+        return {}
+
+
+def _osv_cache_save(cache: dict) -> None:
+    try:
+        OSV_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        OSV_CACHE_FILE.write_text(_json_osv.dumps(cache), encoding="utf-8")
+    except OSError as exc:
+        _log.debug("OSV cache write failed (non-fatal): %s", exc)
+
+
+def _osv_cache_key(ecosystem: str, name: str, version: str) -> str:
+    return f"{ecosystem}::{name}::{version}::{_date.today().isoformat()}"
+
+
+def _osv_query_one(ecosystem: str, name: str, version: str) -> list[dict]:
+    """Query OSV for one component; return the list of vuln dicts (raw OSV).
+
+    Returns an empty list on any error or no-match.
+    """
+    osv_eco = _OSV_ECOSYSTEM.get(ecosystem.lower())
+    if not osv_eco:
+        return []
+    payload = _json_osv.dumps({
+        "version": version,
+        "package": {"name": name, "ecosystem": osv_eco},
+    }).encode("utf-8")
+    req = _urlreq.Request(
+        OSV_QUERY_URL,
+        data=payload,
+        headers={"Content-Type": "application/json",
+                  "User-Agent": "whitney-sbom-enrich"},
+    )
+    try:
+        with _urlreq.urlopen(req, timeout=OSV_TIMEOUT_SECONDS) as resp:
+            body = resp.read()
+    except (_urlerror.URLError, TimeoutError, OSError) as exc:
+        _log.debug("OSV query failed for %s/%s@%s: %s",
+                   ecosystem, name, version, exc)
+        return []
+    try:
+        data = _json_osv.loads(body)
+    except _json_osv.JSONDecodeError:
+        return []
+    return data.get("vulns") or []
+
+
+def _osv_vuln_to_whitney(vuln: dict, name: str, version: str) -> dict:
+    """Convert one OSV vuln dict to Whitney's `vulnerabilities[]` shape."""
+    severity_entries = vuln.get("severity") or []
+    if severity_entries and isinstance(severity_entries, list):
+        sev_score = severity_entries[0].get("score", "")
+        # Crude CVSS-string → severity bucket; OSV doesn't always classify.
+        sev = "high"
+        if isinstance(sev_score, str):
+            if "9." in sev_score or "10.0" in sev_score:
+                sev = "critical"
+            elif "4." in sev_score or "5." in sev_score:
+                sev = "medium"
+            elif "0." in sev_score or "1." in sev_score or "2." in sev_score or "3." in sev_score:
+                sev = "low"
+    else:
+        # Fall back to the database_specific.severity if present.
+        ds = vuln.get("database_specific") or {}
+        sev = (ds.get("severity") or "high").lower()
+        if sev not in ("critical", "high", "medium", "low", "info"):
+            sev = "high"
+
+    # Pull a fix version out of the affected[].ranges[].events[] list.
+    fix_version = ""
+    constraint = ""
+    for affected in vuln.get("affected") or []:
+        for rng in affected.get("ranges") or []:
+            for ev in rng.get("events") or []:
+                if "fixed" in ev and not fix_version:
+                    fix_version = str(ev["fixed"])
+                if "introduced" in ev and not constraint:
+                    constraint = f">= {ev['introduced']}"
+
+    references = [r.get("url", "") for r in (vuln.get("references") or [])
+                   if isinstance(r, dict) and r.get("url")]
+
+    return {
+        "id": vuln.get("id", "OSV-UNKNOWN"),
+        "cve": next((a for a in vuln.get("aliases", [])
+                      if a.startswith("CVE-")), vuln.get("id", "")),
+        "package": name,
+        "version": version,
+        "severity": sev,
+        "description": (vuln.get("summary") or vuln.get("details") or "")[:500],
+        "constraint": constraint,
+        "fix_version": fix_version,
+        "references": references[:5],
+        "source": "osv.dev",
+    }
+
+
+def enrich_with_osv(sbom: dict) -> dict:
+    """Add OSV.dev vulnerability matches to an SBOM dict, in place.
+
+    Walks every SDK component with a non-empty version, queries OSV.dev
+    (parallel, cached), folds matching vulnerabilities into
+    ``sbom["vulnerabilities"]`` deduped by ID. Adds an
+    ``sbom["enrichment"]`` provenance dict with the source name,
+    timestamp, and number of components queried.
+
+    Fails open on any network or parse error — returns the SBOM
+    unchanged (or partially enriched) rather than raising.
+    """
+    components = sbom.get("components") or []
+    cache = _osv_cache_load()
+    queried = 0
+    new_vulns: list[dict] = []
+
+    targets: list[tuple[str, str, str]] = []
+    for c in components:
+        props = {p["name"]: p["value"] for p in (c.get("properties") or [])}
+        if props.get("whitney:component_type") != "sdk":
+            continue
+        ecosystem = props.get("whitney:ecosystem", "")
+        version = c.get("version", "")
+        name = c.get("name", "")
+        if not (ecosystem and version and name and version != "latest"):
+            continue
+        if ecosystem.lower() not in _OSV_ECOSYSTEM:
+            continue
+        targets.append((ecosystem, name, version))
+
+    if not targets:
+        return sbom
+
+    # Limit total fan-out.
+    targets = targets[:MAX_OSV_QUERIES_PER_RUN]
+
+    def _resolve(eco: str, name: str, version: str) -> list[dict]:
+        nonlocal queried
+        key = _osv_cache_key(eco, name, version)
+        if key in cache:
+            return cache[key]
+        queried += 1
+        vulns = _osv_query_one(eco, name, version)
+        cache[key] = vulns
+        return vulns
+
+    with _Pool(max_workers=8) as pool:
+        futures = {
+            pool.submit(_resolve, eco, name, version): (eco, name, version)
+            for eco, name, version in targets
+        }
+        for fut in _as_completed(futures):
+            eco, name, version = futures[fut]
+            try:
+                osv_vulns = fut.result()
+            except Exception as exc:  # pragma: no cover — defensive
+                _log.debug("Worker raised for %s/%s@%s: %s",
+                           eco, name, version, exc)
+                continue
+            for v in osv_vulns:
+                new_vulns.append(_osv_vuln_to_whitney(v, name, version))
+
+    _osv_cache_save(cache)
+
+    # Merge: existing vulns + new OSV vulns, deduped by id.
+    existing = sbom.get("vulnerabilities") or []
+    by_id: dict[str, dict] = {}
+    for v in existing:
+        by_id[v.get("id") or v.get("cve") or id(v)] = v
+    for v in new_vulns:
+        key = v.get("id") or v.get("cve") or id(v)
+        if key not in by_id:
+            by_id[key] = v
+    sbom["vulnerabilities"] = list(by_id.values())
+
+    sbom["enrichment"] = {
+        "source": "osv.dev",
+        "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+        "queried": queried,
+        "cached": len(targets) - queried,
+        "components_considered": len(targets),
+    }
+    return sbom
+
+
+def scan_ai_sbom_code_only_enriched(repo_path: str | Path) -> dict:
+    """Convenience: code-only scan + OSV.dev enrichment in one call."""
+    return enrich_with_osv(scan_ai_sbom_code_only(repo_path))
+
+
