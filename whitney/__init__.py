@@ -35,7 +35,7 @@ from whitney.scanner import (
     scan_repository,
 )
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = [
     "scan_repository",

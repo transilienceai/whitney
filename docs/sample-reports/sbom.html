@@ -1,0 +1,1754 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="whitney 0.2.0">
+<title>Whitney AI SBOM</title>
+<style>
+:root {
+  --bg: #ffffff;
+  --fg: #1f2937;
+  --fg-muted: #6b7280;
+  --card-bg: #ffffff;
+  --card-border: #e5e7eb;
+  --code-bg: #f9fafb;
+  --code-border: #e5e7eb;
+  --accent: #0891b2;
+  --shadow: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.06);
+  --radius: 8px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f172a;
+    --fg: #e2e8f0;
+    --fg-muted: #94a3b8;
+    --card-bg: #1e293b;
+    --card-border: #334155;
+    --code-bg: #0b1220;
+    --code-border: #334155;
+    --shadow: 0 1px 3px rgba(0,0,0,0.4);
+  }
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+               Helvetica, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+.wrap { max-width: 1200px; margin: 0 auto; padding: 32px 24px 64px; }
+header {
+  border-bottom: 1px solid var(--card-border);
+  margin-bottom: 32px;
+  padding-bottom: 16px;
+}
+header .brand {
+  font-size: 0.75rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent);
+  font-weight: 700;
+}
+header h1 { margin: 4px 0 4px; font-size: 1.75rem; font-weight: 700; }
+header .sub { color: var(--fg-muted); font-size: 0.9rem; }
+nav.sticky {
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  border-bottom: 1px solid var(--card-border);
+  padding: 12px 0;
+  margin-bottom: 24px;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 0.875rem;
+}
+nav.sticky a { color: var(--fg-muted); text-decoration: none; }
+nav.sticky a:hover { color: var(--accent); }
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+  margin-bottom: 32px;
+}
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  box-shadow: var(--shadow);
+}
+.card .num { font-size: 2.25rem; font-weight: 700; line-height: 1; }
+.card .lbl {
+  color: var(--fg-muted);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-top: 8px;
+}
+section { margin-bottom: 40px; }
+section > h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0 0 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--card-border);
+}
+.sev-header {
+  position: sticky;
+  top: 56px;
+  background: var(--bg);
+  padding: 12px 0;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-weight: 600;
+  font-size: 1rem;
+  border-bottom: 1px solid var(--card-border);
+  margin-bottom: 12px;
+}
+.badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: white;
+}
+.finding {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  margin-bottom: 16px;
+  box-shadow: var(--shadow);
+}
+.finding .meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  font-size: 0.875rem;
+  color: var(--fg-muted);
+  margin-bottom: 8px;
+}
+.finding .meta a { color: var(--accent); text-decoration: none; }
+.finding .meta a:hover { text-decoration: underline; }
+.finding .check-id {
+  font-family: "JetBrains Mono", "SF Mono", Consolas, monospace;
+  font-size: 0.8rem;
+  color: var(--fg-muted);
+}
+.finding .title { font-weight: 600; margin: 8px 0; }
+pre.code {
+  background: var(--code-bg);
+  border: 1px solid var(--code-border);
+  border-radius: 6px;
+  padding: 12px 16px;
+  overflow-x: auto;
+  font-family: "JetBrains Mono", "SF Mono", Consolas,
+               "Liberation Mono", monospace;
+  font-size: 0.8rem;
+  line-height: 1.55;
+  margin: 12px 0;
+  white-space: pre;
+}
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 12px 0 4px;
+}
+.chip {
+  display: inline-block;
+  padding: 2px 8px;
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  font-size: 0.7rem;
+  font-family: "JetBrains Mono", "SF Mono", Consolas, monospace;
+  color: var(--fg-muted);
+  background: var(--code-bg);
+}
+details {
+  margin-top: 12px;
+  font-size: 0.9rem;
+}
+details summary {
+  cursor: pointer;
+  color: var(--accent);
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+details > p { margin: 8px 0 0; color: var(--fg); }
+.provider-strip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-radius: 6px;
+  margin: 24px 0 12px;
+  color: white;
+  font-weight: 600;
+}
+.provider-strip .count {
+  font-weight: 400;
+  opacity: 0.9;
+  font-size: 0.85rem;
+}
+table.components {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+table.components th, table.components td {
+  text-align: left;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--card-border);
+}
+table.components th {
+  background: var(--code-bg);
+  font-weight: 600;
+  color: var(--fg-muted);
+  text-transform: uppercase;
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+}
+table.components td.purl {
+  font-family: "JetBrains Mono", "SF Mono", Consolas, monospace;
+  font-size: 0.75rem;
+  color: var(--fg-muted);
+}
+.vuln {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-left: 4px solid #dc2626;
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  margin-bottom: 12px;
+  box-shadow: var(--shadow);
+}
+.vuln .id {
+  font-family: "JetBrains Mono", "SF Mono", Consolas, monospace;
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+.vuln .pkg {
+  font-family: "JetBrains Mono", "SF Mono", Consolas, monospace;
+  font-size: 0.8rem;
+  color: var(--fg-muted);
+  margin-left: 8px;
+}
+.vuln .desc { margin: 8px 0; }
+.vuln .meta {
+  font-size: 0.8rem;
+  color: var(--fg-muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.vuln .meta a { color: var(--accent); text-decoration: none; }
+.vuln .meta a:hover { text-decoration: underline; }
+.empty {
+  padding: 24px;
+  text-align: center;
+  color: var(--fg-muted);
+  background: var(--code-bg);
+  border-radius: var(--radius);
+  font-style: italic;
+}
+footer {
+  margin-top: 48px;
+  padding-top: 16px;
+  border-top: 1px solid var(--card-border);
+  font-size: 0.8rem;
+  color: var(--fg-muted);
+}
+footer a { color: var(--accent); text-decoration: none; }
+@media (max-width: 600px) {
+  .wrap { padding: 16px 12px 32px; }
+  header h1 { font-size: 1.4rem; }
+  nav.sticky { font-size: 0.8rem; gap: 8px; }
+  .sev-header { top: 84px; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div class="brand">Whitney v0.2.0</div>
+  <h1>Whitney AI SBOM</h1>
+  <div class="sub">Account <code>code-scan</code> · 2026-04-26T06:40:45Z · 7 components</div>
+</header>
+<div class="cards"><div class="card" style="border-top:4px solid #0891b2"><div class="num">5</div><div class="lbl">SDKs</div></div><div class="card" style="border-top:4px solid #0891b2"><div class="num">2</div><div class="lbl">Models</div></div><div class="card" style="border-top:4px solid #dc2626"><div class="num">52</div><div class="lbl">Vulnerabilities</div></div><div class="card" style="border-top:4px solid #0891b2"><div class="num">5</div><div class="lbl">Providers</div></div></div><nav class="sticky"><a href="#components">Components</a> · <a href="#vulns">Vulnerabilities</a> · <a href="#provenance">Enrichment</a></nav><section id="components"><h2>Components</h2><div class="provider-strip" style="background:#cc785c"><span>anthropic</span><span class="count">2 components</span></div><table class="components">
+<thead><tr>
+<th>Name</th><th>Version</th><th>Type</th><th>Ecosystem</th>
+<th>Source</th><th>purl</th>
+</tr></thead>
+<tbody><tr><td>anthropic</td><td>0.25.0</td><td>sdk</td><td>pypi</td><td>code:requirements.txt</td><td class="purl">pkg:pypi/anthropic@0.25.0</td></tr><tr><td>claude-3-5-sonnet-20241022</td><td>latest</td><td>model</td><td>ai</td><td>code:src\app_003_indirect_web_fetch_summarize.py</td><td class="purl">pkg:ai/anthropic/claude-3-5-sonnet-20241022</td></tr></tbody>
+</table><div class="provider-strip" style="background:#ffb000"><span>huggingface</span><span class="count">1 component</span></div><table class="components">
+<thead><tr>
+<th>Name</th><th>Version</th><th>Type</th><th>Ecosystem</th>
+<th>Source</th><th>purl</th>
+</tr></thead>
+<tbody><tr><td>transformers</td><td>4.30.0</td><td>sdk</td><td>pypi</td><td>code:requirements.txt</td><td class="purl">pkg:pypi/transformers@4.30.0</td></tr></tbody>
+</table><div class="provider-strip" style="background:#0891b2"><span>langchain</span><span class="count">1 component</span></div><table class="components">
+<thead><tr>
+<th>Name</th><th>Version</th><th>Type</th><th>Ecosystem</th>
+<th>Source</th><th>purl</th>
+</tr></thead>
+<tbody><tr><td>langchain</td><td>0.0.300</td><td>sdk</td><td>pypi</td><td>code:requirements.txt</td><td class="purl">pkg:pypi/langchain@0.0.300</td></tr></tbody>
+</table><div class="provider-strip" style="background:#7c3aed"><span>litellm</span><span class="count">1 component</span></div><table class="components">
+<thead><tr>
+<th>Name</th><th>Version</th><th>Type</th><th>Ecosystem</th>
+<th>Source</th><th>purl</th>
+</tr></thead>
+<tbody><tr><td>litellm</td><td>1.40.0</td><td>sdk</td><td>pypi</td><td>code:requirements.txt</td><td class="purl">pkg:pypi/litellm@1.40.0</td></tr></tbody>
+</table><div class="provider-strip" style="background:#10a37f"><span>openai</span><span class="count">2 components</span></div><table class="components">
+<thead><tr>
+<th>Name</th><th>Version</th><th>Type</th><th>Ecosystem</th>
+<th>Source</th><th>purl</th>
+</tr></thead>
+<tbody><tr><td>openai</td><td>1.30.0</td><td>sdk</td><td>pypi</td><td>code:requirements.txt</td><td class="purl">pkg:pypi/openai@1.30.0</td></tr><tr><td>gpt-4o</td><td>latest</td><td>model</td><td>ai</td><td>code:src\app_001_flask_unvalidated_fstring.py</td><td class="purl">pkg:ai/openai/gpt-4o</td></tr></tbody>
+</table></section><section id="vulns"><h2>Known vulnerabilities</h2><div class="vuln">
+  <span class="id">CVE-2023-46229</span>
+  <span class="pkg">langchain</span>
+  <span class="badge" style="background:#d97706">Medium</span>
+  <p class="desc">Arbitrary code execution via prompt injection in PALChain</p>
+  <div class="meta"></div>
+</div><div class="vuln">
+  <span class="id">CVE-2023-49810</span>
+  <span class="pkg">transformers</span>
+  <span class="badge" style="background:#d97706">Medium</span>
+  <p class="desc">Unsafe pickle deserialization in model loading</p>
+  <div class="meta"></div>
+</div><div class="vuln">
+  <span class="id">GHSA-3hjh-jh2h-vrg6</span>
+  <span class="pkg">langchain@0.0.300</span>
+  <span class="badge" style="background:#65a30d">Low</span>
+  <p class="desc">Denial of service in langchain-community</p>
+  <div class="meta">affected: &gt;= 0 · fix: 0.2.5 · <a href="https://nvd.nist.gov/vuln/detail/CVE-2024-2965" target="_blank" rel="noopener">https://nvd.nist.gov/vuln/detail/CVE-2024-2965</a> · <a href="https://github.com/langchain-ai/langchain/pull/22903" target="_blank" rel="noopener">https://github.com/langchain-ai/langchain/pull/22903</a> · <a href="https://github.com/langchain-ai/langchain/commit/73c42306745b0831aa6fe7fe4eeb70d2c2d87a82" target="_blank" rel="noopener">https://github.com/langchain-ai/langchain/commit/73c42306745…</a></div>
+</div><div class="vuln">
+  <span class="id">GHSA-45pg-36p6-83v9</span>
+  <span class="pkg">langchain@0.0.300</span>
+  <span class="badge" style="background:#65a30d">Low</span>
+  <p class="desc">Langchain SQL Injection vulnerability</p>
+  <div class="meta">affected: &gt;= 0.2.0 · fix: 0.2.19 · <a href="https://nvd.nist.gov/vuln/detail/CVE-2024-8309" target="_blank" rel="noopener">https://nvd.nist.gov/vuln/detail/CVE-2024-8309</a> · <a href="https://github.com/langchain-ai/langchain/commit/64c317eba05fbac0c6a6fc5aa192bc0d7130972e" target="_blank" rel="noopener">https://github.com/langchain-ai/langchain/commit/64c317eba05…</a> · <a href="https://github.com/langchain-ai/langchain/commit/c2a3021bb0c5f54649d380b42a0684ca5778c255" target="_blank" rel="noopener">https://github.com/langchain-ai/langchain/commit/c2a3021bb0c…</a></div>
+</div><div class="vuln">
+  <span class="id">GHSA-655w-fm8m-m478</span>
+  <span class="pkg">langchain@0.0.300</span>
+  <span class="badge" style="background:#65a30d">Low</span>
+  <p class="desc">LangChain Server Side Request Forgery vulnerability</p>
+  <div class="meta">affected: &gt;= 0 · fix: 0.0.317 · <a href="https://nvd.nist.gov/vuln/detail/CVE-2023-46229" target="_blank" rel="noopener">https://nvd.nist.gov/vuln/detail/CVE-2023-46229</a> · <a href="https://github.com/langchain-ai/langchain/pull/11925" target="_blank" rel="noopener">https://github.com/langchain-ai/langchain/pull/11925</a> · <a href="https://github.com/langchain-ai/langchain/commit/9ecb7240a480720ec9d739b3877a52f76098a2b8" target="_blank" rel="noopener">https://github.com/langchain-ai/langchain/commit/9ecb7240a48…</a></div>
+</div><div class="vuln">
+  <span class="id">GHSA-6h8p-4hx9-w66c</span>
+  <span class="pkg">langchain@0.0.300</span>
+  <span class="badge" style="background:#65a30d">Low</span>
+  <p class="desc">Langchain Server-Side Request Forgery vulnerability</p>
+  <div class="meta">affected: &gt;= 0 · fix: 0.0.329 · <a href="https://nvd.nist.gov/vuln/detail/CVE-2023-32786" target="_blank" rel="noopener">https://nvd.nist.gov/vuln/detail/CVE-2023-32786</a> · <a href="https://github.com/langchain-ai/langchain/pull/12747" target="_blank" rel="noopener">https://github.com/langchain-ai/langchain/pull/12747</a> · <a href="https://gist.github.com/rharang/d265f46fc3161b31ac2e81db44d662e1" target="_blank" rel="noopener">https://gist.github.com/rharang/d265f46fc3161b31ac2e81db44d6…</a></div>
+</div><div class="vuln">
+  <span class="id">GHSA-7gfq-f96f-g85j</span>
+  <span class="pkg">langchain@0.0.300</span>
+  <span class="badge" style="background:#65a30d">Low</span>
+  <p class="desc">langchain vulnerable to arbitrary code execution</p>
+  <div class="meta">affected: &gt;= 0 · fix: 0.0.312 · <a href="https://nvd.nist.gov/vuln/detail/CVE-2023-36281" target="_blank" rel="noopener">https://nvd.nist.gov/vuln/detail/CVE-2023-36281</a> · <a href="https://github.com/hwchase17/langchain/issues/4394" target="_blank" rel="noopener">https://github.com/hwchase17/langchain/issues/4394</a> · <a href="https://github.com/langchain-ai/langchain/pull/10252" target="_blank" rel="noopener">https://github.com/langchain-ai/langchain/pull/10252</a></div>
+</div><div class="vuln">
+  <span class="id">GHSA-f73w-4m7g-ch9x</span>
+  <span class="pkg">langchain@0.0.300</span>
+  <span class="badge" style="background:#65a30d">Low</span>
+  <p class="desc">Langchain vulnerable to arbitrary code execution via the evaluate function in the numexpr library</p>
+  <div class="meta">affected: &gt;= 0 · fix: 0.0.308 · <a href="https://nvd.nist.gov/vuln/detail/CVE-2023-39631" target="_blank" rel="noopener">https://nvd.nist.gov/vuln/detail/CVE-2023-39631</a> · <a href="https://github.com/langchain-ai/langchain/issues/8363" target="_blank" rel="noopener">https://github.com/langchain-ai/langchain/issues/8363</a> · <a href="https://github.com/pydata/numexpr/issues/442" target="_blank" rel="noopener">https://github.com/pydata/numexpr/issues/442</a></div>
+</div><div class="vuln">
+  <span class="id">GHSA-h59x-p739-982c</span>
+  <span class="pkg">langchain@0.0.300</span>
+  <span class="badge" style="background:#65a30d">Low</span>
+  <p class="desc">LangChain directory traversal vulnerability</p>
+  <div class="meta">affected: &gt;= 0 · fix: 0.0.339 · <a href="https://nvd.nist.gov/vuln/detail/CVE-2024-28088" target="_blank" rel="noopener">https://nvd.nist.gov/vuln/detail/CVE-2024-28088</a> · <a href="https://github.com/langchain-ai/langchain/pull/18600" target="_blank" rel="noopener">https://github.com/langchain-ai/langchain/pull/18600</a> · <a href="https://github.com/langchain-ai/langchain/commit/e1924b3e93d513ca950c72f8e80e1c133749fba5" target="_blank" rel="noopener">https://github.com/langchain-ai/langchain/commit/e1924b3e93d…</a></div>
+</div><div class="vuln">
+  <span class="id">GHSA-h9j7-5xvc-qhg5</span>
+  <span class="pkg">langchain@0.0.300</span>
+  <span class="badge" style="background:#65a30d">Low</span>
+  <p class="desc">langchain Server-Side Request Forgery vulnerability</p>
+  <div class="meta">affected: &gt;= 0 · fix: 0.1.0 · <a href="https://nvd.nist.gov/vuln/detail/CVE-2024-0243" target="_blank" rel="noopener">https://nvd.nist.gov/vuln/detail/CVE-2024-0243</a> · <a href="https://github.com/langchain-ai/langchain/pull/15559" target="_blank" rel="noopener">https://github.com/langchain-ai/langchain/pull/15559</a> · <a href="https://github.com/langchain-ai/langchain/commit/bf0b3cc0b5ade1fb95a5b1b6fa260e99064c2e22" target="_blank" rel="noopener">https://github.com/langchain-ai/langchain/commit/bf0b3cc0b5a…</a></div>
+</div><div class="vuln">
+  <span class="id">GHSA-prgp-w7vf-ch62</span>
+  <span class="pkg">langchain@0.0.300</span>
+  <span class="badge" style="background:#65a30d">Low</span>
+  <p class="desc">LangChain vulnerable to arbitrary code execution</p>
+  <div class="meta">affected: &gt;= 0 · fix: 0.0.325 · <a href="https://nvd.nist.gov/vuln/detail/CVE-2023-39659" target="_blank" rel="noopener">https://nvd.nist.gov/vuln/detail/CVE-2023-39659</a> · <a href="https://github.com/langchain-ai/langchain/issues/7700" target="_blank" rel="noopener">https://github.com/langchain-ai/langchain/issues/7700</a> · <a href="https://github.com/langchain-ai/langchain/pull/12427" target="_blank" rel="noopener">https://github.com/langchain-ai/langchain/pull/12427</a></div>
+</div><div class="vuln">
+  <span class="id">GHSA-rgp8-pm28-3759</span>
+  <span class="pkg">langchain@0.0.300</span>
+  <span class="badge" style="background:#65a30d">Low</span>
+  <p class="desc">langchain vulnerable to path traversal</p>
+  <div class="meta">affected: &gt;= 0 · fix: 0.0.353 · <a href="https://nvd.nist.gov/vuln/detail/CVE-2024-3571" target="_blank" rel="noopener">https://nvd.nist.gov/vuln/detail/CVE-2024-3571</a> · <a href="https://github.com/langchain-ai/langchain/commit/aad3d8bd47d7f5598156ff2bdcc8f736f24a7412" target="_blank" rel="noopener">https://github.com/langchain-ai/langchain/commit/aad3d8bd47d…</a> · <a href="https://github.com/langchain-ai/langchain" target="_blank" rel="noopener">https://github.com/langchain-ai/langchain</a></div>
+</div><div class="vuln">
+  <span class="id">PYSEC-2023-162</span>
+  <span class="pkg">langchain@0.0.300</span>
+  <span class="badge" style="background:#65a30d">Low</span>
+  <p class="desc">An issue in LanChain-ai Langchain v.0.0.245 allows a remote attacker to execute arbitrary code via the evaluate function in the numexpr library.</p>
+  <div class="meta">affected: &gt;= 0 · fix: 0.0.308 · <a href="https://github.com/pydata/numexpr/issues/442" target="_blank" rel="noopener">https://github.com/pydata/numexpr/issues/442</a> · <a href="https://github.com/langchain-ai/langchain/issues/8363" target="_blank" rel="noopener">https://github.com/langchain-ai/langchain/issues/8363</a> · <a href="https://github.com/langchain-ai/langchain/pull/11302" target="_blank" rel="noopener">https://github.com/langchain-ai/langchain/pull/11302</a></div>
+</div><div class="vuln">
+  <span class="id">PYSEC-2023-205</span>
+  <span class="pkg">langchain@0.0.300</span>
+  <span class="badge" style="background:#ea580c">High</span>
+  <p class="desc">LangChain before 0.0.317 allows SSRF via document_loaders/recursive_url_loader.py because crawling can proceed from an external server to an internal server.</p>
+  <div class="meta">affected: &gt;= 0 · fix: 9ecb7240a480720ec9d739b3877a52f76098a2b8 · <a href="https://github.com/langchain-ai/langchain/commit/9ecb7240a480720ec9d739b3877a52f76098a2b8" target="_blank" rel="noopener">https://github.com/langchain-ai/langchain/commit/9ecb7240a48…</a> · <a href="https://github.com/langchain-ai/langchain/pull/11925" target="_blank" rel="noopener">https://github.com/langchain-ai/langchain/pull/11925</a></div>
+</div><div class="vuln">
+  <span class="id">PYSEC-2024-115</span>
+  <span class="pkg">langchain@0.0.300</span>
+  <span class="badge" style="background:#65a30d">Low</span>
+  <p class="desc">A vulnerability in the GraphCypherQAChain class of langchain-ai/langchain-community version 0.2.5 allows for SQL injection through prompt injection. This vulnerability can lead to unauthorized data manipulation, data exfiltration, denial of service (DoS) by deleting all data, breaches in multi-tenant security environments, and data integrity issues. Attackers can create, update, or delete nodes and relationships without proper authorization, extract sensitive data, disrupt services, access data </p>
+  <div class="meta">affected: &gt;= 0 · fix: c2a3021bb0c5f54649d380b42a0684ca5778c255 · <a href="https://huntr.com/bounties/8f4ad910-7fdc-4089-8f0a-b5df5f32e7c5" target="_blank" rel="noopener">https://huntr.com/bounties/8f4ad910-7fdc-4089-8f0a-b5df5f32e…</a> · <a href="https://github.com/langchain-ai/langchain/commit/c2a3021bb0c5f54649d380b42a0684ca5778c255" target="_blank" rel="noopener">https://github.com/langchain-ai/langchain/commit/c2a3021bb0c…</a></div>
+</div><div class="vuln">
+  <span class="id">PYSEC-2024-118</span>
+  <span class="pkg">langchain@0.0.300</span>
+  <span class="badge" style="background:#65a30d">Low</span>
+  <p class="desc">A Denial-of-Service (DoS) vulnerability exists in the `SitemapLoader` class of the `langchain-ai/langchain` repository, affecting all versions. The `parse_sitemap` method, responsible for parsing sitemaps and extracting URLs, lacks a mechanism to prevent infinite recursion when a sitemap URL refers to the current sitemap itself. This oversight allows for the possibility of an infinite loop, leading to a crash by exceeding the maximum recursion depth in Python. This vulnerability can be exploited</p>
+  <div class="meta">affected: &gt;= 0 · fix: 73c42306745b0831aa6fe7fe4eeb70d2c2d87a82 · <a href="https://huntr.com/bounties/90b0776d-9fa6-4841-aac4-09fde5918cae" target="_blank" rel="noopener">https://huntr.com/bounties/90b0776d-9fa6-4841-aac4-09fde5918…</a> · <a href="https://github.com/langchain-ai/langchain/commit/73c42306745b0831aa6fe7fe4eeb70d2c2d87a82" target="_blank" rel="noopener">https://github.com/langchain-ai/langchain/commit/73c42306745…</a></div>
+</div><div class="vuln">
+  <span class="id">PYSEC-2024-43</span>
+  <span class="pkg">langchain@0.0.300</span>
+  <span class="badge" style="background:#ea580c">High</span>
+  <p class="desc">LangChain through 0.1.10 allows ../ directory traversal by an actor who is able to control the final part of the path parameter in a load_chain call. This bypasses the intended behavior of loading configurations only from the hwchase17/langchain-hub GitHub repository. The outcome can be disclosure of an API key for a large language model online service, or remote code execution.</p>
+  <div class="meta">affected: &gt;= 0 · fix: 0.1.11 · <a href="https://github.com/PinkDraconian/PoC-Langchain-RCE/blob/main/README.md" target="_blank" rel="noopener">https://github.com/PinkDraconian/PoC-Langchain-RCE/blob/main…</a> · <a href="https://github.com/langchain-ai/langchain/blob/f96dd57501131840b713ed7c2e86cbf1ddc2761f/libs/core/langchain_core/utils/loading.py" target="_blank" rel="noopener">https://github.com/langchain-ai/langchain/blob/f96dd57501131…</a></div>
+</div><div class="vuln">
+  <span class="id">GHSA-53mr-6c8q-9789</span>
+  <span class="pkg">litellm@1.40.0</span>
+  <span class="badge" style="background:#d97706">Medium</span>
+  <p class="desc">LiteLLM: Privilege escalation via unrestricted proxy configuration endpoint</p>
+  <div class="meta">affected: &gt;= 0 · fix: 1.83.0 · <a href="https://github.com/BerriAI/litellm/security/advisories/GHSA-53mr-6c8q-9789" target="_blank" rel="noopener">https://github.com/BerriAI/litellm/security/advisories/GHSA-…</a> · <a href="https://nvd.nist.gov/vuln/detail/CVE-2026-35029" target="_blank" rel="noopener">https://nvd.nist.gov/vuln/detail/CVE-2026-35029</a> · <a href="https://github.com/BerriAI/litellm" target="_blank" rel="noopener">https://github.com/BerriAI/litellm</a></div>
+</div><div class="vuln">
+  <span class="id">GHSA-69x8-hrgq-fjj8</span>
+  <span class="pkg">litellm@1.40.0</span>
+  <span class="badge" style="background:#d97706">Medium</span>
+  <p class="desc">LiteLLM: Password hash exposure and pass-the-hash authentication bypass</p>
+  <div class="meta">affected: &gt;= 0 · fix: 1.83.0 · <a href="https://github.com/BerriAI/litellm/security/advisories/GHSA-69x8-hrgq-fjj8" target="_blank" rel="noopener">https://github.com/BerriAI/litellm/security/advisories/GHSA-…</a> · <a href="https://github.com/BerriAI/litellm" target="_blank" rel="noopener">https://github.com/BerriAI/litellm</a></div>
+</div><div class="vuln">
+  <span class="id">GHSA-879v-fggm-vxw2</span>
+  <span class="pkg">litellm@1.40.0</span>
+  <span class="badge" style="background:#65a30d">Low</span>
+  <p class="desc">LiteLLM Has a Leakage of Langfuse API Keys</p>
+  <div class="meta">affected: &gt;= 0 · <a href="https://nvd.nist.gov/vuln/detail/CVE-2025-0330" target="_blank" rel="noopener">https://nvd.nist.gov/vuln/detail/CVE-2025-0330</a> · <a href="https://github.com/BerriAI/litellm" target="_blank" rel="noopener">https://github.com/BerriAI/litellm</a> · <a href="https://huntr.com/bounties/661b388a-44d8-4ad5-862b-4dc5b80be30a" target="_blank" rel="noopener">https://huntr.com/bounties/661b388a-44d8-4ad5-862b-4dc5b80be…</a></div>
+</div><div class="vuln">
+  <span class="id">GHSA-fh2c-86xm-pm2x</span>
+  <span class="pkg">litellm@1.40.0</span>
+  <span class="badge" style="background:#65a30d">Low</span>
+  <p class="desc">LiteLLM Vulnerable to Denial of Service (DoS) via Crafted HTTP Request</p>
+  <div class="meta">affected: &gt;= 0 · fix: 1.56.2 · <a href="https://nvd.nist.gov/vuln/detail/CVE-2024-8984" target="_blank" rel="noopener">https://nvd.nist.gov/vuln/detail/CVE-2024-8984</a> · <a href="https://github.com/BerriAI/litellm/commit/4f49f836aa844ac9b6bfbeff27e6f6b2b9cf3f61" target="_blank" rel="noopener">https://github.com/BerriAI/litellm/commit/4f49f836aa844ac9b6…</a> · <a href="https://github.com/BerriAI/litellm" target="_blank" rel="noopener">https://github.com/BerriAI/litellm</a></div>
+</div><div class="vuln">
+  <span class="id">GHSA-fjcf-3j3r-78rp</span>
+  <span class="pkg">litellm@1.40.0</span>
+  <span class="badge" style="background:#65a30d">Low</span>
+  <p class="desc">LiteLLM Has an Improper Authorization Vulnerability</p>
+  <div class="meta">affected: &gt;= 0 · fix: 1.61.15 · <a href="https://nvd.nist.gov/vuln/detail/CVE-2025-0628" target="_blank" rel="noopener">https://nvd.nist.gov/vuln/detail/CVE-2025-0628</a> · <a href="https://github.com/berriai/litellm/commit/566d9354aab4215091b2e51ad0333e948125fa1b" target="_blank" rel="noopener">https://github.com/berriai/litellm/commit/566d9354aab4215091…</a> · <a href="https://github.com/BerriAI/litellm" target="_blank" rel="noopener">https://github.com/BerriAI/litellm</a></div>
+</div><div class="vuln">
+  <span class="id">GHSA-g26j-5385-hhw3</span>
+  <span class="pkg">litellm@1.40.0</span>
+  <span class="badge" style="background:#65a30d">Low</span>
+  <p class="desc">LiteLLM Server-Side Request Forgery (SSRF) vulnerability</p>
+  <div class="meta">affected: &gt;= 0 · fix: 1.44.8 · <a href="https://nvd.nist.gov/vuln/detail/CVE-2024-6587" target="_blank" rel="noopener">https://nvd.nist.gov/vuln/detail/CVE-2024-6587</a> · <a href="https://github.com/berriai/litellm/commit/ba1912afd1b19e38d3704bb156adf887f91ae1e0" target="_blank" rel="noopener">https://github.com/berriai/litellm/commit/ba1912afd1b19e38d3…</a> · <a href="https://github.com/berriai/litellm" target="_blank" rel="noopener">https://github.com/berriai/litellm</a></div>
+</div><div class="vuln">
+  <span class="id">GHSA-g5pg-73fc-hjwq</span>
+  <span class="pkg">litellm@1.40.0</span>
+  <span class="badge" style="background:#65a30d">Low</span>
+  <p class="desc">LiteLLM Reveals Portion of API Key via a Logging File</p>
+  <div class="meta">affected: &gt;= 0 · fix: 1.44.12 · <a href="https://nvd.nist.gov/vuln/detail/CVE-2024-9606" target="_blank" rel="noopener">https://nvd.nist.gov/vuln/detail/CVE-2024-9606</a> · <a href="https://github.com/berriai/litellm/commit/9094071c4782183e84f10630e2450be3db55509a" target="_blank" rel="noopener">https://github.com/berriai/litellm/commit/9094071c4782183e84…</a> · <a href="https://github.com/BerriAI/litellm" target="_blank" rel="noopener">https://github.com/BerriAI/litellm</a></div>
+</div><div class="vuln">
+  <span class="id">GHSA-gppg-gqw8-wh9g</span>
+  <span class="pkg">litellm@1.40.0</span>
+  <span class="badge" style="background:#65a30d">Low</span>
+  <p class="desc">litellm vulnerable to remote code execution based on using eval unsafely</p>
+  <div class="meta">affected: &gt;= 0 · fix: 1.40.16 · <a href="https://nvd.nist.gov/vuln/detail/CVE-2024-5751" target="_blank" rel="noopener">https://nvd.nist.gov/vuln/detail/CVE-2024-5751</a> · <a href="https://github.com/BerriAI/litellm/pull/4228" target="_blank" rel="noopener">https://github.com/BerriAI/litellm/pull/4228</a> · <a href="https://github.com/BerriAI/litellm/commit/fcea4c22ad96b24436f196ae709f71932e84b0b8" target="_blank" rel="noopener">https://github.com/BerriAI/litellm/commit/fcea4c22ad96b24436…</a></div>
+</div><div class="vuln">
+  <span class="id">GHSA-gw2q-qw9j-rgv7</span>
+  <span class="pkg">litellm@1.40.0</span>
+  <span class="badge" style="background:#65a30d">Low</span>
+  <p class="desc">LiteLLM Vulnerable to Denial of Service (DoS)</p>
+  <div class="meta">affected: &gt;= 0 · fix: 1.53.1.dev1 · <a href="https://nvd.nist.gov/vuln/detail/CVE-2024-10188" target="_blank" rel="noopener">https://nvd.nist.gov/vuln/detail/CVE-2024-10188</a> · <a href="https://github.com/berriai/litellm/commit/21156ff5d0d84a7dd93f951ca033275c77e4f73c" target="_blank" rel="noopener">https://github.com/berriai/litellm/commit/21156ff5d0d84a7dd9…</a> · <a href="https://github.com/BerriAI/litellm" target="_blank" rel="noopener">https://github.com/BerriAI/litellm</a></div>
+</div><div class="vuln">
+  <span class="id">GHSA-jjhc-v7c2-5hh6</span>
+  <span class="pkg">litellm@1.40.0</span>
+  <span class="badge" style="background:#d97706">Medium</span>
+  <p class="desc">LiteLLM: Authentication bypass via OIDC userinfo cache key collision</p>
+  <div class="meta">affected: &gt;= 0 · fix: 1.83.0 · <a href="https://github.com/BerriAI/litellm/security/advisories/GHSA-jjhc-v7c2-5hh6" target="_blank" rel="noopener">https://github.com/BerriAI/litellm/security/advisories/GHSA-…</a> · <a href="https://nvd.nist.gov/vuln/detail/CVE-2026-35030" target="_blank" rel="noopener">https://nvd.nist.gov/vuln/detail/CVE-2026-35030</a> · <a href="https://github.com/BerriAI/litellm" target="_blank" rel="noopener">https://github.com/BerriAI/litellm</a></div>
+</div><div class="vuln">
+  <span class="id">GHSA-qqcv-vg9f-5rr3</span>
+  <span class="pkg">litellm@1.40.0</span>
+  <span class="badge" style="background:#65a30d">Low</span>
+  <p class="desc">litellm vulnerable to improper access control in team management</p>
+  <div class="meta">affected: &gt;= 0 · fix: 1.40.15 · <a href="https://nvd.nist.gov/vuln/detail/CVE-2024-5710" target="_blank" rel="noopener">https://nvd.nist.gov/vuln/detail/CVE-2024-5710</a> · <a href="https://github.com/BerriAI/litellm/commit/da3ae00bd68f451ed8ddf0bc0a9fd34bde5554d6" target="_blank" rel="noopener">https://github.com/BerriAI/litellm/commit/da3ae00bd68f451ed8…</a> · <a href="https://github.com/BerriAI/litellm/blob/224148d6133ee50801cb129cbd21ccc213992e25/litellm/proxy/auth/user_api_key_auth.py#L1020" target="_blank" rel="noopener">https://github.com/BerriAI/litellm/blob/224148d6133ee50801cb…</a></div>
+</div><div class="vuln">
+  <span class="id">GHSA-37mw-44qp-f5jm</span>
+  <span class="pkg">transformers@4.30.0</span>
+  <span class="badge" style="background:#65a30d">Low</span>
+  <p class="desc">Transformers is vulnerable to ReDoS attack through its DonutProcessor class</p>
+  <div class="meta">affected: &gt;= 0 · fix: 4.52.1 · <a href="https://nvd.nist.gov/vuln/detail/CVE-2025-3933" target="_blank" rel="noopener">https://nvd.nist.gov/vuln/detail/CVE-2025-3933</a> · <a href="https://github.com/huggingface/transformers/pull/37788" target="_blank" rel="noopener">https://github.com/huggingface/transformers/pull/37788</a> · <a href="https://github.com/huggingface/transformers/commit/ebbe9b12dd75b69f92100d684c47f923ee262a93" target="_blank" rel="noopener">https://github.com/huggingface/transformers/commit/ebbe9b12d…</a></div>
+</div><div class="vuln">
+  <span class="id">GHSA-37q5-v5qm-c9v8</span>
+  <span class="pkg">transformers@4.30.0</span>
+  <span class="badge" style="background:#65a30d">Low</span>
+  <p class="desc">Transformers Deserialization of Untrusted Data vulnerability</p>
+  <div class="meta">affected: &gt;= 0 · fix: 4.38.0 · <a href="https://nvd.nist.gov/vuln/detail/CVE-2024-3568" target="_blank" rel="noopener">https://nvd.nist.gov/vuln/detail/CVE-2024-3568</a> · <a href="https://github.com/huggingface/transformers/commit/693667b8ac8138b83f8adb6522ddaf42fa07c125" target="_blank" rel="noopener">https://github.com/huggingface/transformers/commit/693667b8a…</a> · <a href="https://github.com/huggingface/transformers" target="_blank" rel="noopener">https://github.com/huggingface/transformers</a></div>
+</div><div class="vuln">
+  <span class="id">GHSA-3863-2447-669p</span>
+  <span class="pkg">transformers@4.30.0</span>
+  <span class="badge" style="background:#65a30d">Low</span>
+  <p class="desc">transformers has a Deserialization of Untrusted Data vulnerability</p>
+  <div class="meta">affected: &gt;= 0 · fix: 4.36.0 · <a href="https://nvd.nist.gov/vuln/detail/CVE-2023-6730" target="_blank" rel="noopener">https://nvd.nist.gov/vuln/detail/CVE-2023-6730</a> · <a href="https://github.com/huggingface/transformers/commit/1d63b0ec361e7a38f1339385e8a5a855085532ce" target="_blank" rel="noopener">https://github.com/huggingface/transformers/commit/1d63b0ec3…</a> · <a href="https://github.com/huggingface/transformers" target="_blank" rel="noopener">https://github.com/huggingface/transformers</a></div>
+</div><div class="vuln">
+  <span class="id">GHSA-4w7r-h757-3r74</span>
+  <span class="pkg">transformers@4.30.0</span>
+  <span class="badge" style="background:#65a30d">Low</span>
+  <p class="desc">Hugging Face Transformers vulnerable to Regular Expression Denial of Service (ReDoS) in the AdamWeightDecay optimizer</p>
+  <div class="meta">affected: &gt;= 0 · fix: 4.53.0 · <a href="https://nvd.nist.gov/vuln/detail/CVE-2025-6921" target="_blank" rel="noopener">https://nvd.nist.gov/vuln/detail/CVE-2025-6921</a> · <a href="https://github.com/huggingface/transformers/commit/47c34fba5c303576560cb29767efb452ff12b8be" target="_blank" rel="noopener">https://github.com/huggingface/transformers/commit/47c34fba5…</a> · <a href="https://github.com/huggingface/transformers/commit/d37f7517972f67e3f2194c000ed0f87f064e5099" target="_blank" rel="noopener">https://github.com/huggingface/transformers/commit/d37f75179…</a></div>
+</div><div class="vuln">
+  <span class="id">GHSA-59p9-h35m-wg4g</span>
+  <span class="pkg">transformers@4.30.0</span>
+  <span class="badge" style="background:#65a30d">Low</span>
+  <p class="desc">Hugging Face Transformers is vulnerable to ReDoS through its MarianTokenizer</p>
+  <div class="meta">affected: &gt;= 0 · fix: 4.53.0 · <a href="https://nvd.nist.gov/vuln/detail/CVE-2025-6638" target="_blank" rel="noopener">https://nvd.nist.gov/vuln/detail/CVE-2025-6638</a> · <a href="https://github.com/huggingface/transformers/commit/47c34fba5c303576560cb29767efb452ff12b8be" target="_blank" rel="noopener">https://github.com/huggingface/transformers/commit/47c34fba5…</a> · <a href="https://github.com/huggingface/transformers/commit/d37f7517972f67e3f2194c000ed0f87f064e5099" target="_blank" rel="noopener">https://github.com/huggingface/transformers/commit/d37f75179…</a></div>
+</div><div class="vuln">
+  <span class="id">GHSA-69w3-r845-3855</span>
+  <span class="pkg">transformers@4.30.0</span>
+  <span class="badge" style="background:#65a30d">Low</span>
+  <p class="desc">HuggingFace Transformers allows for arbitrary code execution in the `Trainer` class</p>
+  <div class="meta">affected: &gt;= 0 · fix: 5.0.0rc3 · <a href="https://nvd.nist.gov/vuln/detail/CVE-2026-1839" target="_blank" rel="noopener">https://nvd.nist.gov/vuln/detail/CVE-2026-1839</a> · <a href="https://github.com/huggingface/transformers/commit/03c8082ba4594c9b8d6fe190ca9bed0e5f8ca396" target="_blank" rel="noopener">https://github.com/huggingface/transformers/commit/03c8082ba…</a> · <a href="https://github.com/huggingface/transformers" target="_blank" rel="noopener">https://github.com/huggingface/transformers</a></div>
+</div><div class="vuln">
+  <span class="id">GHSA-6rvg-6v2m-4j46</span>
+  <span class="pkg">transformers@4.30.0</span>
+  <span class="badge" style="background:#65a30d">Low</span>
+  <p class="desc">Transformers Regular Expression Denial of Service (ReDoS) vulnerability</p>
+  <div class="meta">affected: &gt;= 0 · fix: 4.48.0 · <a href="https://nvd.nist.gov/vuln/detail/CVE-2024-12720" target="_blank" rel="noopener">https://nvd.nist.gov/vuln/detail/CVE-2024-12720</a> · <a href="https://github.com/huggingface/transformers/commit/deac971c469bcbb182c2e52da0b82fb3bf54cccf" target="_blank" rel="noopener">https://github.com/huggingface/transformers/commit/deac971c4…</a> · <a href="https://github.com/huggingface/transformers" target="_blank" rel="noopener">https://github.com/huggingface/transformers</a></div>
+</div><div class="vuln">
+  <span class="id">GHSA-9356-575x-2w9m</span>
+  <span class="pkg">transformers@4.30.0</span>
+  <span class="badge" style="background:#65a30d">Low</span>
+  <p class="desc">Hugging Face Transformers Regular Expression Denial of Service (ReDoS) vulnerability</p>
+  <div class="meta">affected: &gt;= 0 · fix: 4.53.0 · <a href="https://nvd.nist.gov/vuln/detail/CVE-2025-5197" target="_blank" rel="noopener">https://nvd.nist.gov/vuln/detail/CVE-2025-5197</a> · <a href="https://github.com/huggingface/transformers/commit/701caef704e356dc2f9331cc3fd5df0eccb4720a" target="_blank" rel="noopener">https://github.com/huggingface/transformers/commit/701caef70…</a> · <a href="https://github.com/huggingface/transformers/commit/944b56000be5e9b61af8301aa340838770ad8a0b" target="_blank" rel="noopener">https://github.com/huggingface/transformers/commit/944b56000…</a></div>
+</div><div class="vuln">
+  <span class="id">GHSA-fpwr-67px-3qhx</span>
+  <span class="pkg">transformers@4.30.0</span>
+  <span class="badge" style="background:#65a30d">Low</span>
+  <p class="desc">Transformers Regular Expression Denial of Service (ReDoS) vulnerability</p>
+  <div class="meta">affected: &gt;= 0 · fix: 4.50.0 · <a href="https://nvd.nist.gov/vuln/detail/CVE-2025-1194" target="_blank" rel="noopener">https://nvd.nist.gov/vuln/detail/CVE-2025-1194</a> · <a href="https://github.com/huggingface/transformers/commit/92c5ca9dd70de3ade2af2eb835c96215cc50e815" target="_blank" rel="noopener">https://github.com/huggingface/transformers/commit/92c5ca9dd…</a> · <a href="https://github.com/huggingface/transformers" target="_blank" rel="noopener">https://github.com/huggingface/transformers</a></div>
+</div><div class="vuln">
+  <span class="id">GHSA-hxxf-235m-72v3</span>
+  <span class="pkg">transformers@4.30.0</span>
+  <span class="badge" style="background:#65a30d">Low</span>
+  <p class="desc">Deserialization of Untrusted Data in Hugging Face Transformers</p>
+  <div class="meta">affected: &gt;= 0 · fix: 4.48.0 · <a href="https://nvd.nist.gov/vuln/detail/CVE-2024-11394" target="_blank" rel="noopener">https://nvd.nist.gov/vuln/detail/CVE-2024-11394</a> · <a href="https://github.com/huggingface/transformers/issues/34840" target="_blank" rel="noopener">https://github.com/huggingface/transformers/issues/34840</a> · <a href="https://github.com/huggingface/transformers/pull/35296" target="_blank" rel="noopener">https://github.com/huggingface/transformers/pull/35296</a></div>
+</div><div class="vuln">
+  <span class="id">GHSA-jjph-296x-mrcr</span>
+  <span class="pkg">transformers@4.30.0</span>
+  <span class="badge" style="background:#65a30d">Low</span>
+  <p class="desc">Transformers vulnerable to ReDoS attack through its get_imports() function</p>
+  <div class="meta">affected: &gt;= 0 · fix: 4.51.0 · <a href="https://nvd.nist.gov/vuln/detail/CVE-2025-3264" target="_blank" rel="noopener">https://nvd.nist.gov/vuln/detail/CVE-2025-3264</a> · <a href="https://github.com/huggingface/transformers/commit/0720e206c6ba28887e4d60ef60a6a089f6c1cc76" target="_blank" rel="noopener">https://github.com/huggingface/transformers/commit/0720e206c…</a> · <a href="https://github.com/huggingface/transformers/commit/126abe3461762e5fc180e7e614391d1b4ab051ca" target="_blank" rel="noopener">https://github.com/huggingface/transformers/commit/126abe346…</a></div>
+</div><div class="vuln">
+  <span class="id">GHSA-phhr-52qp-3mj4</span>
+  <span class="pkg">transformers@4.30.0</span>
+  <span class="badge" style="background:#65a30d">Low</span>
+  <p class="desc">Transformers&#x27;s Improper Input Validation vulnerability can be exploited through username injection</p>
+  <div class="meta">affected: &gt;= 0 · fix: 4.52.1 · <a href="https://nvd.nist.gov/vuln/detail/CVE-2025-3777" target="_blank" rel="noopener">https://nvd.nist.gov/vuln/detail/CVE-2025-3777</a> · <a href="https://github.com/huggingface/transformers/commit/4dda5f71b35fb70cf602187eef84bb17a50b9082" target="_blank" rel="noopener">https://github.com/huggingface/transformers/commit/4dda5f71b…</a> · <a href="https://github.com/huggingface/transformers" target="_blank" rel="noopener">https://github.com/huggingface/transformers</a></div>
+</div><div class="vuln">
+  <span class="id">GHSA-q2wp-rjmx-x6x9</span>
+  <span class="pkg">transformers@4.30.0</span>
+  <span class="badge" style="background:#65a30d">Low</span>
+  <p class="desc">Transformers&#x27;s ReDoS vulnerability in get_configuration_file can lead to catastrophic backtracking</p>
+  <div class="meta">affected: &gt;= 0 · fix: 4.51.0 · <a href="https://nvd.nist.gov/vuln/detail/CVE-2025-3263" target="_blank" rel="noopener">https://nvd.nist.gov/vuln/detail/CVE-2025-3263</a> · <a href="https://github.com/huggingface/transformers/commit/0720e206c6ba28887e4d60ef60a6a089f6c1cc76" target="_blank" rel="noopener">https://github.com/huggingface/transformers/commit/0720e206c…</a> · <a href="https://github.com/huggingface/transformers/commit/126abe3461762e5fc180e7e614391d1b4ab051ca" target="_blank" rel="noopener">https://github.com/huggingface/transformers/commit/126abe346…</a></div>
+</div><div class="vuln">
+  <span class="id">GHSA-qq3j-4f4f-9583</span>
+  <span class="pkg">transformers@4.30.0</span>
+  <span class="badge" style="background:#65a30d">Low</span>
+  <p class="desc">Hugging Face Transformers Regular Expression Denial of Service</p>
+  <div class="meta">affected: &gt;= 0 · fix: 4.50.0 · <a href="https://nvd.nist.gov/vuln/detail/CVE-2025-2099" target="_blank" rel="noopener">https://nvd.nist.gov/vuln/detail/CVE-2025-2099</a> · <a href="https://github.com/huggingface/transformers/pull/36648" target="_blank" rel="noopener">https://github.com/huggingface/transformers/pull/36648</a> · <a href="https://github.com/huggingface/transformers/commit/8cb522b4190bd556ce51be04942720650b1a3e57" target="_blank" rel="noopener">https://github.com/huggingface/transformers/commit/8cb522b41…</a></div>
+</div><div class="vuln">
+  <span class="id">GHSA-qxrp-vhvm-j765</span>
+  <span class="pkg">transformers@4.30.0</span>
+  <span class="badge" style="background:#65a30d">Low</span>
+  <p class="desc">Deserialization of Untrusted Data in Hugging Face Transformers</p>
+  <div class="meta">affected: &gt;= 0 · fix: 4.48.0 · <a href="https://nvd.nist.gov/vuln/detail/CVE-2024-11392" target="_blank" rel="noopener">https://nvd.nist.gov/vuln/detail/CVE-2024-11392</a> · <a href="https://github.com/huggingface/transformers/issues/34840" target="_blank" rel="noopener">https://github.com/huggingface/transformers/issues/34840</a> · <a href="https://github.com/huggingface/transformers/pull/35296" target="_blank" rel="noopener">https://github.com/huggingface/transformers/pull/35296</a></div>
+</div><div class="vuln">
+  <span class="id">GHSA-rcv9-qm8p-9p6j</span>
+  <span class="pkg">transformers@4.30.0</span>
+  <span class="badge" style="background:#65a30d">Low</span>
+  <p class="desc">Hugging Face Transformers library has Regular Expression Denial of Service</p>
+  <div class="meta">affected: &gt;= 0 · fix: 4.53.0 · <a href="https://nvd.nist.gov/vuln/detail/CVE-2025-6051" target="_blank" rel="noopener">https://nvd.nist.gov/vuln/detail/CVE-2025-6051</a> · <a href="https://github.com/huggingface/transformers/pull/38844" target="_blank" rel="noopener">https://github.com/huggingface/transformers/pull/38844</a> · <a href="https://github.com/huggingface/transformers/commit/54a02160eb030da9be18231c77791f2eb3a52216" target="_blank" rel="noopener">https://github.com/huggingface/transformers/commit/54a02160e…</a></div>
+</div><div class="vuln">
+  <span class="id">GHSA-v68g-wm8c-6x7j</span>
+  <span class="pkg">transformers@4.30.0</span>
+  <span class="badge" style="background:#65a30d">Low</span>
+  <p class="desc">transformers has a Deserialization of Untrusted Data vulnerability</p>
+  <div class="meta">affected: &gt;= 0 · fix: 4.36.0 · <a href="https://nvd.nist.gov/vuln/detail/CVE-2023-7018" target="_blank" rel="noopener">https://nvd.nist.gov/vuln/detail/CVE-2023-7018</a> · <a href="https://github.com/huggingface/transformers/commit/1d63b0ec361e7a38f1339385e8a5a855085532ce" target="_blank" rel="noopener">https://github.com/huggingface/transformers/commit/1d63b0ec3…</a> · <a href="https://github.com/huggingface/transformers" target="_blank" rel="noopener">https://github.com/huggingface/transformers</a></div>
+</div><div class="vuln">
+  <span class="id">GHSA-wrfc-pvp9-mr9g</span>
+  <span class="pkg">transformers@4.30.0</span>
+  <span class="badge" style="background:#65a30d">Low</span>
+  <p class="desc">Deserialization of Untrusted Data in Hugging Face Transformers</p>
+  <div class="meta">affected: &gt;= 0 · fix: 4.48.0 · <a href="https://nvd.nist.gov/vuln/detail/CVE-2024-11393" target="_blank" rel="noopener">https://nvd.nist.gov/vuln/detail/CVE-2024-11393</a> · <a href="https://github.com/huggingface/transformers/issues/34840" target="_blank" rel="noopener">https://github.com/huggingface/transformers/issues/34840</a> · <a href="https://github.com/huggingface/transformers/pull/35296" target="_blank" rel="noopener">https://github.com/huggingface/transformers/pull/35296</a></div>
+</div><div class="vuln">
+  <span class="id">PYSEC-2023-300</span>
+  <span class="pkg">transformers@4.30.0</span>
+  <span class="badge" style="background:#65a30d">Low</span>
+  <p class="desc">Deserialization of Untrusted Data in GitHub repository huggingface/transformers prior to 4.36.</p>
+  <div class="meta">affected: &gt;= 0 · fix: 1d63b0ec361e7a38f1339385e8a5a855085532ce · <a href="https://huntr.com/bounties/423611ee-7a2a-442a-babb-3ed2f8385c16" target="_blank" rel="noopener">https://huntr.com/bounties/423611ee-7a2a-442a-babb-3ed2f8385…</a> · <a href="https://github.com/huggingface/transformers/commit/1d63b0ec361e7a38f1339385e8a5a855085532ce" target="_blank" rel="noopener">https://github.com/huggingface/transformers/commit/1d63b0ec3…</a></div>
+</div><div class="vuln">
+  <span class="id">PYSEC-2023-301</span>
+  <span class="pkg">transformers@4.30.0</span>
+  <span class="badge" style="background:#65a30d">Low</span>
+  <p class="desc">Deserialization of Untrusted Data in GitHub repository huggingface/transformers prior to 4.36.</p>
+  <div class="meta">affected: &gt;= 0 · fix: 1d63b0ec361e7a38f1339385e8a5a855085532ce · <a href="https://huntr.com/bounties/e1a3e548-e53a-48df-b708-9ee62140963c" target="_blank" rel="noopener">https://huntr.com/bounties/e1a3e548-e53a-48df-b708-9ee621409…</a> · <a href="https://github.com/huggingface/transformers/commit/1d63b0ec361e7a38f1339385e8a5a855085532ce" target="_blank" rel="noopener">https://github.com/huggingface/transformers/commit/1d63b0ec3…</a></div>
+</div><div class="vuln">
+  <span class="id">PYSEC-2024-227</span>
+  <span class="pkg">transformers@4.30.0</span>
+  <span class="badge" style="background:#65a30d">Low</span>
+  <p class="desc">Hugging Face Transformers MobileViTV2 Deserialization of Untrusted Data Remote Code Execution Vulnerability. This vulnerability allows remote attackers to execute arbitrary code on affected installations of Hugging Face Transformers. User interaction is required to exploit this vulnerability in that the target must visit a malicious page or open a malicious file.
+
+The specific flaw exists within the handling of configuration files. The issue results from the lack of proper validation of user-sup</p>
+  <div class="meta">affected: &gt;= 0 · fix: 4.48.0 · <a href="https://www.zerodayinitiative.com/advisories/ZDI-24-1513/" target="_blank" rel="noopener">https://www.zerodayinitiative.com/advisories/ZDI-24-1513/</a></div>
+</div><div class="vuln">
+  <span class="id">PYSEC-2024-228</span>
+  <span class="pkg">transformers@4.30.0</span>
+  <span class="badge" style="background:#65a30d">Low</span>
+  <p class="desc">Hugging Face Transformers MaskFormer Model Deserialization of Untrusted Data Remote Code Execution Vulnerability. This vulnerability allows remote attackers to execute arbitrary code on affected installations of Hugging Face Transformers. User interaction is required to exploit this vulnerability in that the target must visit a malicious page or open a malicious file.
+
+The specific flaw exists within the parsing of model files. The issue results from the lack of proper validation of user-supplie</p>
+  <div class="meta">affected: &gt;= 0 · fix: 4.48.0 · <a href="https://www.zerodayinitiative.com/advisories/ZDI-24-1514/" target="_blank" rel="noopener">https://www.zerodayinitiative.com/advisories/ZDI-24-1514/</a></div>
+</div><div class="vuln">
+  <span class="id">PYSEC-2024-229</span>
+  <span class="pkg">transformers@4.30.0</span>
+  <span class="badge" style="background:#65a30d">Low</span>
+  <p class="desc">Hugging Face Transformers Trax Model Deserialization of Untrusted Data Remote Code Execution Vulnerability. This vulnerability allows remote attackers to execute arbitrary code on affected installations of Hugging Face Transformers. User interaction is required to exploit this vulnerability in that the target must visit a malicious page or open a malicious file.
+
+The specific flaw exists within the handling of model files. The issue results from the lack of proper validation of user-supplied dat</p>
+  <div class="meta">affected: &gt;= 0 · fix: 4.48.0 · <a href="https://www.zerodayinitiative.com/advisories/ZDI-24-1515/" target="_blank" rel="noopener">https://www.zerodayinitiative.com/advisories/ZDI-24-1515/</a></div>
+</div><div class="vuln">
+  <span class="id">PYSEC-2025-40</span>
+  <span class="pkg">transformers@4.30.0</span>
+  <span class="badge" style="background:#65a30d">Low</span>
+  <p class="desc">A vulnerability in the `preprocess_string()` function of the `transformers.testing_utils` module in huggingface/transformers version v4.48.3 allows for a Regular Expression Denial of Service (ReDoS) attack. The regular expression used to process code blocks in docstrings contains nested quantifiers, leading to exponential backtracking when processing input with a large number of newline characters. An attacker can exploit this by providing a specially crafted payload, causing high CPU usage and </p>
+  <div class="meta">affected: &gt;= 0 · fix: 8cb522b4190bd556ce51be04942720650b1a3e57 · <a href="https://huntr.com/bounties/97b780f3-ffca-424f-ad5d-0e1c57a5bde4" target="_blank" rel="noopener">https://huntr.com/bounties/97b780f3-ffca-424f-ad5d-0e1c57a5b…</a> · <a href="https://github.com/huggingface/transformers/commit/8cb522b4190bd556ce51be04942720650b1a3e57" target="_blank" rel="noopener">https://github.com/huggingface/transformers/commit/8cb522b41…</a></div>
+</div></section><section id="provenance"><div class="empty" style="text-align:left">Enriched from <code>osv.dev</code> at 2026-04-26 06:40 UTC (4 component queryies).</div></section>
+<footer>
+  Generated 2026-04-26 06:40 UTC by
+  <a href="https://github.com/transilienceai/whitney">Whitney</a>
+  v0.2.0.
+</footer>
+</div>
+<script type="application/json" id="whitney-data">
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.5",
+  "serialNumber": "urn:whitney:code-scan:2026-04-26T06:40:45Z",
+  "version": 1,
+  "metadata": {
+    "timestamp": "2026-04-26T06:40:45Z",
+    "tools": [
+      {
+        "vendor": "Whitney",
+        "name": "Whitney AI SBOM Scanner",
+        "version": "0.1.0"
+      }
+    ],
+    "component": {
+      "type": "application",
+      "name": "ai-inventory-code-scan",
+      "version": "1.0.0"
+    }
+  },
+  "components": [
+    {
+      "type": "library",
+      "name": "langchain",
+      "version": "0.0.300",
+      "purl": "pkg:pypi/langchain@0.0.300",
+      "properties": [
+        {
+          "name": "whitney:component_type",
+          "value": "sdk"
+        },
+        {
+          "name": "whitney:provider",
+          "value": "langchain"
+        },
+        {
+          "name": "whitney:ecosystem",
+          "value": "pypi"
+        },
+        {
+          "name": "whitney:source",
+          "value": "code:requirements.txt"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "openai",
+      "version": "1.30.0",
+      "purl": "pkg:pypi/openai@1.30.0",
+      "properties": [
+        {
+          "name": "whitney:component_type",
+          "value": "sdk"
+        },
+        {
+          "name": "whitney:provider",
+          "value": "openai"
+        },
+        {
+          "name": "whitney:ecosystem",
+          "value": "pypi"
+        },
+        {
+          "name": "whitney:source",
+          "value": "code:requirements.txt"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "anthropic",
+      "version": "0.25.0",
+      "purl": "pkg:pypi/anthropic@0.25.0",
+      "properties": [
+        {
+          "name": "whitney:component_type",
+          "value": "sdk"
+        },
+        {
+          "name": "whitney:provider",
+          "value": "anthropic"
+        },
+        {
+          "name": "whitney:ecosystem",
+          "value": "pypi"
+        },
+        {
+          "name": "whitney:source",
+          "value": "code:requirements.txt"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "transformers",
+      "version": "4.30.0",
+      "purl": "pkg:pypi/transformers@4.30.0",
+      "properties": [
+        {
+          "name": "whitney:component_type",
+          "value": "sdk"
+        },
+        {
+          "name": "whitney:provider",
+          "value": "huggingface"
+        },
+        {
+          "name": "whitney:ecosystem",
+          "value": "pypi"
+        },
+        {
+          "name": "whitney:source",
+          "value": "code:requirements.txt"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "litellm",
+      "version": "1.40.0",
+      "purl": "pkg:pypi/litellm@1.40.0",
+      "properties": [
+        {
+          "name": "whitney:component_type",
+          "value": "sdk"
+        },
+        {
+          "name": "whitney:provider",
+          "value": "litellm"
+        },
+        {
+          "name": "whitney:ecosystem",
+          "value": "pypi"
+        },
+        {
+          "name": "whitney:source",
+          "value": "code:requirements.txt"
+        }
+      ]
+    },
+    {
+      "type": "framework",
+      "name": "gpt-4o",
+      "version": "latest",
+      "purl": "pkg:ai/openai/gpt-4o",
+      "properties": [
+        {
+          "name": "whitney:component_type",
+          "value": "model"
+        },
+        {
+          "name": "whitney:provider",
+          "value": "openai"
+        },
+        {
+          "name": "whitney:ecosystem",
+          "value": "ai"
+        },
+        {
+          "name": "whitney:source",
+          "value": "code:src\\app_001_flask_unvalidated_fstring.py"
+        }
+      ]
+    },
+    {
+      "type": "framework",
+      "name": "claude-3-5-sonnet-20241022",
+      "version": "latest",
+      "purl": "pkg:ai/anthropic/claude-3-5-sonnet-20241022",
+      "properties": [
+        {
+          "name": "whitney:component_type",
+          "value": "model"
+        },
+        {
+          "name": "whitney:provider",
+          "value": "anthropic"
+        },
+        {
+          "name": "whitney:ecosystem",
+          "value": "ai"
+        },
+        {
+          "name": "whitney:source",
+          "value": "code:src\\app_003_indirect_web_fetch_summarize.py"
+        }
+      ]
+    }
+  ],
+  "vulnerabilities": [
+    {
+      "id": "CVE-2023-46229",
+      "description": "Arbitrary code execution via prompt injection in PALChain",
+      "affects": [
+        {
+          "ref": "langchain"
+        }
+      ],
+      "ratings": [
+        {
+          "severity": "medium"
+        }
+      ],
+      "properties": [
+        {
+          "name": "whitney:package",
+          "value": "langchain"
+        },
+        {
+          "name": "whitney:version",
+          "value": "0.0.300"
+        },
+        {
+          "name": "whitney:constraint",
+          "value": "< 0.0.325"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2023-49810",
+      "description": "Unsafe pickle deserialization in model loading",
+      "affects": [
+        {
+          "ref": "transformers"
+        }
+      ],
+      "ratings": [
+        {
+          "severity": "medium"
+        }
+      ],
+      "properties": [
+        {
+          "name": "whitney:package",
+          "value": "transformers"
+        },
+        {
+          "name": "whitney:version",
+          "value": "4.30.0"
+        },
+        {
+          "name": "whitney:constraint",
+          "value": "< 4.36.0"
+        }
+      ]
+    },
+    {
+      "id": "GHSA-3hjh-jh2h-vrg6",
+      "cve": "CVE-2024-2965",
+      "package": "langchain",
+      "version": "0.0.300",
+      "severity": "low",
+      "description": "Denial of service in langchain-community",
+      "constraint": ">= 0",
+      "fix_version": "0.2.5",
+      "references": [
+        "https://nvd.nist.gov/vuln/detail/CVE-2024-2965",
+        "https://github.com/langchain-ai/langchain/pull/22903",
+        "https://github.com/langchain-ai/langchain/commit/73c42306745b0831aa6fe7fe4eeb70d2c2d87a82",
+        "https://github.com/langchain-ai/langchain/commit/9a877c7adbd06f90a2518152f65b562bd90487cc",
+        "https://github.com/langchain-ai/langchain"
+      ],
+      "source": "osv.dev"
+    },
+    {
+      "id": "GHSA-45pg-36p6-83v9",
+      "cve": "CVE-2024-8309",
+      "package": "langchain",
+      "version": "0.0.300",
+      "severity": "low",
+      "description": "Langchain SQL Injection vulnerability",
+      "constraint": ">= 0.2.0",
+      "fix_version": "0.2.19",
+      "references": [
+        "https://nvd.nist.gov/vuln/detail/CVE-2024-8309",
+        "https://github.com/langchain-ai/langchain/commit/64c317eba05fbac0c6a6fc5aa192bc0d7130972e",
+        "https://github.com/langchain-ai/langchain/commit/c2a3021bb0c5f54649d380b42a0684ca5778c255",
+        "https://github.com/langchain-ai/langchain",
+        "https://github.com/pypa/advisory-database/tree/main/vulns/langchain/PYSEC-2024-115.yaml"
+      ],
+      "source": "osv.dev"
+    },
+    {
+      "id": "GHSA-655w-fm8m-m478",
+      "cve": "CVE-2023-46229",
+      "package": "langchain",
+      "version": "0.0.300",
+      "severity": "low",
+      "description": "LangChain Server Side Request Forgery vulnerability",
+      "constraint": ">= 0",
+      "fix_version": "0.0.317",
+      "references": [
+        "https://nvd.nist.gov/vuln/detail/CVE-2023-46229",
+        "https://github.com/langchain-ai/langchain/pull/11925",
+        "https://github.com/langchain-ai/langchain/commit/9ecb7240a480720ec9d739b3877a52f76098a2b8",
+        "https://github.com/langchain-ai/langchain",
+        "https://github.com/pypa/advisory-database/tree/main/vulns/langchain/PYSEC-2023-205.yaml"
+      ],
+      "source": "osv.dev"
+    },
+    {
+      "id": "GHSA-6h8p-4hx9-w66c",
+      "cve": "CVE-2023-32786",
+      "package": "langchain",
+      "version": "0.0.300",
+      "severity": "low",
+      "description": "Langchain Server-Side Request Forgery vulnerability",
+      "constraint": ">= 0",
+      "fix_version": "0.0.329",
+      "references": [
+        "https://nvd.nist.gov/vuln/detail/CVE-2023-32786",
+        "https://github.com/langchain-ai/langchain/pull/12747",
+        "https://gist.github.com/rharang/d265f46fc3161b31ac2e81db44d662e1",
+        "https://github.com/langchain-ai/langchain",
+        "https://github.com/langchain-ai/langchain/releases/tag/v0.0.329"
+      ],
+      "source": "osv.dev"
+    },
+    {
+      "id": "GHSA-7gfq-f96f-g85j",
+      "cve": "CVE-2023-36281",
+      "package": "langchain",
+      "version": "0.0.300",
+      "severity": "low",
+      "description": "langchain vulnerable to arbitrary code execution",
+      "constraint": ">= 0",
+      "fix_version": "0.0.312",
+      "references": [
+        "https://nvd.nist.gov/vuln/detail/CVE-2023-36281",
+        "https://github.com/hwchase17/langchain/issues/4394",
+        "https://github.com/langchain-ai/langchain/pull/10252",
+        "https://github.com/langchain-ai/langchain/commit/22abeb9f6cc555591bf8e92b5e328e43aa07ff6c",
+        "https://aisec.today/LangChain-2e6244a313dd46139c5ef28cbcab9e55"
+      ],
+      "source": "osv.dev"
+    },
+    {
+      "id": "GHSA-f73w-4m7g-ch9x",
+      "cve": "CVE-2023-39631",
+      "package": "langchain",
+      "version": "0.0.300",
+      "severity": "low",
+      "description": "Langchain vulnerable to arbitrary code execution via the evaluate function in the numexpr library",
+      "constraint": ">= 0",
+      "fix_version": "0.0.308",
+      "references": [
+        "https://nvd.nist.gov/vuln/detail/CVE-2023-39631",
+        "https://github.com/langchain-ai/langchain/issues/8363",
+        "https://github.com/pydata/numexpr/issues/442",
+        "https://github.com/langchain-ai/langchain/pull/11302",
+        "https://github.com/pydata/numexpr/commit/4b2d89cf14e75030d27629925b9998e1e91d23c7"
+      ],
+      "source": "osv.dev"
+    },
+    {
+      "id": "GHSA-h59x-p739-982c",
+      "cve": "CVE-2024-28088",
+      "package": "langchain",
+      "version": "0.0.300",
+      "severity": "low",
+      "description": "LangChain directory traversal vulnerability",
+      "constraint": ">= 0",
+      "fix_version": "0.0.339",
+      "references": [
+        "https://nvd.nist.gov/vuln/detail/CVE-2024-28088",
+        "https://github.com/langchain-ai/langchain/pull/18600",
+        "https://github.com/langchain-ai/langchain/commit/e1924b3e93d513ca950c72f8e80e1c133749fba5",
+        "https://github.com/PinkDraconian/PoC-Langchain-RCE/blob/main/README.md",
+        "https://github.com/langchain-ai/langchain"
+      ],
+      "source": "osv.dev"
+    },
+    {
+      "id": "GHSA-h9j7-5xvc-qhg5",
+      "cve": "CVE-2024-0243",
+      "package": "langchain",
+      "version": "0.0.300",
+      "severity": "low",
+      "description": "langchain Server-Side Request Forgery vulnerability",
+      "constraint": ">= 0",
+      "fix_version": "0.1.0",
+      "references": [
+        "https://nvd.nist.gov/vuln/detail/CVE-2024-0243",
+        "https://github.com/langchain-ai/langchain/pull/15559",
+        "https://github.com/langchain-ai/langchain/commit/bf0b3cc0b5ade1fb95a5b1b6fa260e99064c2e22",
+        "https://github.com/langchain-ai/langchain",
+        "https://github.com/langchain-ai/langchain/blob/bf0b3cc0b5ade1fb95a5b1b6fa260e99064c2e22/libs/community/langchain_community/document_loaders/recursive_url_loader.py#L51-L51"
+      ],
+      "source": "osv.dev"
+    },
+    {
+      "id": "GHSA-prgp-w7vf-ch62",
+      "cve": "CVE-2023-39659",
+      "package": "langchain",
+      "version": "0.0.300",
+      "severity": "low",
+      "description": "LangChain vulnerable to arbitrary code execution",
+      "constraint": ">= 0",
+      "fix_version": "0.0.325",
+      "references": [
+        "https://nvd.nist.gov/vuln/detail/CVE-2023-39659",
+        "https://github.com/langchain-ai/langchain/issues/7700",
+        "https://github.com/langchain-ai/langchain/pull/12427",
+        "https://github.com/langchain-ai/langchain/pull/5640",
+        "https://github.com/langchain-ai/langchain/commit/cadfce295f8a33828fc635c2e5ea28b883e5c992"
+      ],
+      "source": "osv.dev"
+    },
+    {
+      "id": "GHSA-rgp8-pm28-3759",
+      "cve": "CVE-2024-3571",
+      "package": "langchain",
+      "version": "0.0.300",
+      "severity": "low",
+      "description": "langchain vulnerable to path traversal",
+      "constraint": ">= 0",
+      "fix_version": "0.0.353",
+      "references": [
+        "https://nvd.nist.gov/vuln/detail/CVE-2024-3571",
+        "https://github.com/langchain-ai/langchain/commit/aad3d8bd47d7f5598156ff2bdcc8f736f24a7412",
+        "https://github.com/langchain-ai/langchain",
+        "https://huntr.com/bounties/2df3acdc-ee4f-4257-bbf8-a7de3870a9d8"
+      ],
+      "source": "osv.dev"
+    },
+    {
+      "id": "PYSEC-2023-162",
+      "cve": "CVE-2023-39631",
+      "package": "langchain",
+      "version": "0.0.300",
+      "severity": "low",
+      "description": "An issue in LanChain-ai Langchain v.0.0.245 allows a remote attacker to execute arbitrary code via the evaluate function in the numexpr library.",
+      "constraint": ">= 0",
+      "fix_version": "0.0.308",
+      "references": [
+        "https://github.com/pydata/numexpr/issues/442",
+        "https://github.com/langchain-ai/langchain/issues/8363",
+        "https://github.com/langchain-ai/langchain/pull/11302"
+      ],
+      "source": "osv.dev"
+    },
+    {
+      "id": "PYSEC-2023-205",
+      "cve": "CVE-2023-46229",
+      "package": "langchain",
+      "version": "0.0.300",
+      "severity": "high",
+      "description": "LangChain before 0.0.317 allows SSRF via document_loaders/recursive_url_loader.py because crawling can proceed from an external server to an internal server.",
+      "constraint": ">= 0",
+      "fix_version": "9ecb7240a480720ec9d739b3877a52f76098a2b8",
+      "references": [
+        "https://github.com/langchain-ai/langchain/commit/9ecb7240a480720ec9d739b3877a52f76098a2b8",
+        "https://github.com/langchain-ai/langchain/pull/11925"
+      ],
+      "source": "osv.dev"
+    },
+    {
+      "id": "PYSEC-2024-115",
+      "cve": "CVE-2024-8309",
+      "package": "langchain",
+      "version": "0.0.300",
+      "severity": "low",
+      "description": "A vulnerability in the GraphCypherQAChain class of langchain-ai/langchain-community version 0.2.5 allows for SQL injection through prompt injection. This vulnerability can lead to unauthorized data manipulation, data exfiltration, denial of service (DoS) by deleting all data, breaches in multi-tenant security environments, and data integrity issues. Attackers can create, update, or delete nodes and relationships without proper authorization, extract sensitive data, disrupt services, access data ",
+      "constraint": ">= 0",
+      "fix_version": "c2a3021bb0c5f54649d380b42a0684ca5778c255",
+      "references": [
+        "https://huntr.com/bounties/8f4ad910-7fdc-4089-8f0a-b5df5f32e7c5",
+        "https://github.com/langchain-ai/langchain/commit/c2a3021bb0c5f54649d380b42a0684ca5778c255"
+      ],
+      "source": "osv.dev"
+    },
+    {
+      "id": "PYSEC-2024-118",
+      "cve": "CVE-2024-2965",
+      "package": "langchain",
+      "version": "0.0.300",
+      "severity": "low",
+      "description": "A Denial-of-Service (DoS) vulnerability exists in the `SitemapLoader` class of the `langchain-ai/langchain` repository, affecting all versions. The `parse_sitemap` method, responsible for parsing sitemaps and extracting URLs, lacks a mechanism to prevent infinite recursion when a sitemap URL refers to the current sitemap itself. This oversight allows for the possibility of an infinite loop, leading to a crash by exceeding the maximum recursion depth in Python. This vulnerability can be exploited",
+      "constraint": ">= 0",
+      "fix_version": "73c42306745b0831aa6fe7fe4eeb70d2c2d87a82",
+      "references": [
+        "https://huntr.com/bounties/90b0776d-9fa6-4841-aac4-09fde5918cae",
+        "https://github.com/langchain-ai/langchain/commit/73c42306745b0831aa6fe7fe4eeb70d2c2d87a82"
+      ],
+      "source": "osv.dev"
+    },
+    {
+      "id": "PYSEC-2024-43",
+      "cve": "CVE-2024-28088",
+      "package": "langchain",
+      "version": "0.0.300",
+      "severity": "high",
+      "description": "LangChain through 0.1.10 allows ../ directory traversal by an actor who is able to control the final part of the path parameter in a load_chain call. This bypasses the intended behavior of loading configurations only from the hwchase17/langchain-hub GitHub repository. The outcome can be disclosure of an API key for a large language model online service, or remote code execution.",
+      "constraint": ">= 0",
+      "fix_version": "0.1.11",
+      "references": [
+        "https://github.com/PinkDraconian/PoC-Langchain-RCE/blob/main/README.md",
+        "https://github.com/langchain-ai/langchain/blob/f96dd57501131840b713ed7c2e86cbf1ddc2761f/libs/core/langchain_core/utils/loading.py"
+      ],
+      "source": "osv.dev"
+    },
+    {
+      "id": "GHSA-53mr-6c8q-9789",
+      "cve": "CVE-2026-35029",
+      "package": "litellm",
+      "version": "1.40.0",
+      "severity": "medium",
+      "description": "LiteLLM: Privilege escalation via unrestricted proxy configuration endpoint",
+      "constraint": ">= 0",
+      "fix_version": "1.83.0",
+      "references": [
+        "https://github.com/BerriAI/litellm/security/advisories/GHSA-53mr-6c8q-9789",
+        "https://nvd.nist.gov/vuln/detail/CVE-2026-35029",
+        "https://github.com/BerriAI/litellm"
+      ],
+      "source": "osv.dev"
+    },
+    {
+      "id": "GHSA-69x8-hrgq-fjj8",
+      "cve": "GHSA-69x8-hrgq-fjj8",
+      "package": "litellm",
+      "version": "1.40.0",
+      "severity": "medium",
+      "description": "LiteLLM: Password hash exposure and pass-the-hash authentication bypass",
+      "constraint": ">= 0",
+      "fix_version": "1.83.0",
+      "references": [
+        "https://github.com/BerriAI/litellm/security/advisories/GHSA-69x8-hrgq-fjj8",
+        "https://github.com/BerriAI/litellm"
+      ],
+      "source": "osv.dev"
+    },
+    {
+      "id": "GHSA-879v-fggm-vxw2",
+      "cve": "CVE-2025-0330",
+      "package": "litellm",
+      "version": "1.40.0",
+      "severity": "low",
+      "description": "LiteLLM Has a Leakage of Langfuse API Keys",
+      "constraint": ">= 0",
+      "fix_version": "",
+      "references": [
+        "https://nvd.nist.gov/vuln/detail/CVE-2025-0330",
+        "https://github.com/BerriAI/litellm",
+        "https://huntr.com/bounties/661b388a-44d8-4ad5-862b-4dc5b80be30a"
+      ],
+      "source": "osv.dev"
+    },
+    {
+      "id": "GHSA-fh2c-86xm-pm2x",
+      "cve": "CVE-2024-8984",
+      "package": "litellm",
+      "version": "1.40.0",
+      "severity": "low",
+      "description": "LiteLLM Vulnerable to Denial of Service (DoS) via Crafted HTTP Request",
+      "constraint": ">= 0",
+      "fix_version": "1.56.2",
+      "references": [
+        "https://nvd.nist.gov/vuln/detail/CVE-2024-8984",
+        "https://github.com/BerriAI/litellm/commit/4f49f836aa844ac9b6bfbeff27e6f6b2b9cf3f61",
+        "https://github.com/BerriAI/litellm",
+        "https://github.com/BerriAI/litellm/blob/8c5ff150f6142608ffe968e4e68429f978fda187/litellm/tests/test_spend_logs.py#L242",
+        "https://huntr.com/bounties/554fc76b-3097-4223-b4cf-110b853e9355"
+      ],
+      "source": "osv.dev"
+    },
+    {
+      "id": "GHSA-fjcf-3j3r-78rp",
+      "cve": "CVE-2025-0628",
+      "package": "litellm",
+      "version": "1.40.0",
+      "severity": "low",
+      "description": "LiteLLM Has an Improper Authorization Vulnerability",
+      "constraint": ">= 0",
+      "fix_version": "1.61.15",
+      "references": [
+        "https://nvd.nist.gov/vuln/detail/CVE-2025-0628",
+        "https://github.com/berriai/litellm/commit/566d9354aab4215091b2e51ad0333e948125fa1b",
+        "https://github.com/BerriAI/litellm",
+        "https://huntr.com/bounties/6c0e2f75-2d03-42f9-9530-e16a973317fc"
+      ],
+      "source": "osv.dev"
+    },
+    {
+      "id": "GHSA-g26j-5385-hhw3",
+      "cve": "CVE-2024-6587",
+      "package": "litellm",
+      "version": "1.40.0",
+      "severity": "low",
+      "description": "LiteLLM Server-Side Request Forgery (SSRF) vulnerability",
+      "constraint": ">= 0",
+      "fix_version": "1.44.8",
+      "references": [
+        "https://nvd.nist.gov/vuln/detail/CVE-2024-6587",
+        "https://github.com/berriai/litellm/commit/ba1912afd1b19e38d3704bb156adf887f91ae1e0",
+        "https://github.com/berriai/litellm",
+        "https://huntr.com/bounties/4001e1a2-7b7a-4776-a3ae-e6692ec3d997"
+      ],
+      "source": "osv.dev"
+    },
+    {
+      "id": "GHSA-g5pg-73fc-hjwq",
+      "cve": "CVE-2024-9606",
+      "package": "litellm",
+      "version": "1.40.0",
+      "severity": "low",
+      "description": "LiteLLM Reveals Portion of API Key via a Logging File",
+      "constraint": ">= 0",
+      "fix_version": "1.44.12",
+      "references": [
+        "https://nvd.nist.gov/vuln/detail/CVE-2024-9606",
+        "https://github.com/berriai/litellm/commit/9094071c4782183e84f10630e2450be3db55509a",
+        "https://github.com/BerriAI/litellm",
+        "https://huntr.com/bounties/4a03796f-a8d4-4293-84ef-d3959456223a"
+      ],
+      "source": "osv.dev"
+    },
+    {
+      "id": "GHSA-gppg-gqw8-wh9g",
+      "cve": "CVE-2024-5751",
+      "package": "litellm",
+      "version": "1.40.0",
+      "severity": "low",
+      "description": "litellm vulnerable to remote code execution based on using eval unsafely",
+      "constraint": ">= 0",
+      "fix_version": "1.40.16",
+      "references": [
+        "https://nvd.nist.gov/vuln/detail/CVE-2024-5751",
+        "https://github.com/BerriAI/litellm/pull/4228",
+        "https://github.com/BerriAI/litellm/commit/fcea4c22ad96b24436f196ae709f71932e84b0b8",
+        "https://github.com/berriai/litellm",
+        "https://huntr.com/bounties/ae623c2f-b64b-4245-9ed4-f13a0a5824ce"
+      ],
+      "source": "osv.dev"
+    },
+    {
+      "id": "GHSA-gw2q-qw9j-rgv7",
+      "cve": "CVE-2024-10188",
+      "package": "litellm",
+      "version": "1.40.0",
+      "severity": "low",
+      "description": "LiteLLM Vulnerable to Denial of Service (DoS)",
+      "constraint": ">= 0",
+      "fix_version": "1.53.1.dev1",
+      "references": [
+        "https://nvd.nist.gov/vuln/detail/CVE-2024-10188",
+        "https://github.com/berriai/litellm/commit/21156ff5d0d84a7dd93f951ca033275c77e4f73c",
+        "https://github.com/BerriAI/litellm",
+        "https://huntr.com/bounties/96a32812-213c-4819-ba4e-36143d35e95b"
+      ],
+      "source": "osv.dev"
+    },
+    {
+      "id": "GHSA-jjhc-v7c2-5hh6",
+      "cve": "CVE-2026-35030",
+      "package": "litellm",
+      "version": "1.40.0",
+      "severity": "medium",
+      "description": "LiteLLM: Authentication bypass via OIDC userinfo cache key collision",
+      "constraint": ">= 0",
+      "fix_version": "1.83.0",
+      "references": [
+        "https://github.com/BerriAI/litellm/security/advisories/GHSA-jjhc-v7c2-5hh6",
+        "https://nvd.nist.gov/vuln/detail/CVE-2026-35030",
+        "https://github.com/BerriAI/litellm"
+      ],
+      "source": "osv.dev"
+    },
+    {
+      "id": "GHSA-qqcv-vg9f-5rr3",
+      "cve": "CVE-2024-5710",
+      "package": "litellm",
+      "version": "1.40.0",
+      "severity": "low",
+      "description": "litellm vulnerable to improper access control in team management",
+      "constraint": ">= 0",
+      "fix_version": "1.40.15",
+      "references": [
+        "https://nvd.nist.gov/vuln/detail/CVE-2024-5710",
+        "https://github.com/BerriAI/litellm/commit/da3ae00bd68f451ed8ddf0bc0a9fd34bde5554d6",
+        "https://github.com/BerriAI/litellm/blob/224148d6133ee50801cb129cbd21ccc213992e25/litellm/proxy/auth/user_api_key_auth.py#L1020",
+        "https://github.com/berriai/litellm",
+        "https://huntr.com/bounties/70897f59-a966-4d93-b71e-745e3da91970"
+      ],
+      "source": "osv.dev"
+    },
+    {
+      "id": "GHSA-37mw-44qp-f5jm",
+      "cve": "CVE-2025-3933",
+      "package": "transformers",
+      "version": "4.30.0",
+      "severity": "low",
+      "description": "Transformers is vulnerable to ReDoS attack through its DonutProcessor class",
+      "constraint": ">= 0",
+      "fix_version": "4.52.1",
+      "references": [
+        "https://nvd.nist.gov/vuln/detail/CVE-2025-3933",
+        "https://github.com/huggingface/transformers/pull/37788",
+        "https://github.com/huggingface/transformers/commit/ebbe9b12dd75b69f92100d684c47f923ee262a93",
+        "https://github.com/huggingface/transformers",
+        "https://huntr.com/bounties/25282953-5827-4384-bb6f-5790d275721b"
+      ],
+      "source": "osv.dev"
+    },
+    {
+      "id": "GHSA-37q5-v5qm-c9v8",
+      "cve": "CVE-2024-3568",
+      "package": "transformers",
+      "version": "4.30.0",
+      "severity": "low",
+      "description": "Transformers Deserialization of Untrusted Data vulnerability",
+      "constraint": ">= 0",
+      "fix_version": "4.38.0",
+      "references": [
+        "https://nvd.nist.gov/vuln/detail/CVE-2024-3568",
+        "https://github.com/huggingface/transformers/commit/693667b8ac8138b83f8adb6522ddaf42fa07c125",
+        "https://github.com/huggingface/transformers",
+        "https://huntr.com/bounties/b3c36992-5264-4d7f-9906-a996efafba8f"
+      ],
+      "source": "osv.dev"
+    },
+    {
+      "id": "GHSA-3863-2447-669p",
+      "cve": "CVE-2023-6730",
+      "package": "transformers",
+      "version": "4.30.0",
+      "severity": "low",
+      "description": "transformers has a Deserialization of Untrusted Data vulnerability",
+      "constraint": ">= 0",
+      "fix_version": "4.36.0",
+      "references": [
+        "https://nvd.nist.gov/vuln/detail/CVE-2023-6730",
+        "https://github.com/huggingface/transformers/commit/1d63b0ec361e7a38f1339385e8a5a855085532ce",
+        "https://github.com/huggingface/transformers",
+        "https://github.com/pypa/advisory-database/tree/main/vulns/transformers/PYSEC-2023-300.yaml",
+        "https://huntr.com/bounties/423611ee-7a2a-442a-babb-3ed2f8385c16"
+      ],
+      "source": "osv.dev"
+    },
+    {
+      "id": "GHSA-4w7r-h757-3r74",
+      "cve": "CVE-2025-6921",
+      "package": "transformers",
+      "version": "4.30.0",
+      "severity": "low",
+      "description": "Hugging Face Transformers vulnerable to Regular Expression Denial of Service (ReDoS) in the AdamWeightDecay optimizer",
+      "constraint": ">= 0",
+      "fix_version": "4.53.0",
+      "references": [
+        "https://nvd.nist.gov/vuln/detail/CVE-2025-6921",
+        "https://github.com/huggingface/transformers/commit/47c34fba5c303576560cb29767efb452ff12b8be",
+        "https://github.com/huggingface/transformers/commit/d37f7517972f67e3f2194c000ed0f87f064e5099",
+        "https://github.com/huggingface/transformers",
+        "https://huntr.com/bounties/287d15a7-6e7c-45d2-8c05-11e305776f1f"
+      ],
+      "source": "osv.dev"
+    },
+    {
+      "id": "GHSA-59p9-h35m-wg4g",
+      "cve": "CVE-2025-6638",
+      "package": "transformers",
+      "version": "4.30.0",
+      "severity": "low",
+      "description": "Hugging Face Transformers is vulnerable to ReDoS through its MarianTokenizer",
+      "constraint": ">= 0",
+      "fix_version": "4.53.0",
+      "references": [
+        "https://nvd.nist.gov/vuln/detail/CVE-2025-6638",
+        "https://github.com/huggingface/transformers/commit/47c34fba5c303576560cb29767efb452ff12b8be",
+        "https://github.com/huggingface/transformers/commit/d37f7517972f67e3f2194c000ed0f87f064e5099",
+        "https://github.com/huggingface/transformers",
+        "https://huntr.com/bounties/6a6c933f-9ce8-4ded-8b3b-2c1444c61f36"
+      ],
+      "source": "osv.dev"
+    },
+    {
+      "id": "GHSA-69w3-r845-3855",
+      "cve": "CVE-2026-1839",
+      "package": "transformers",
+      "version": "4.30.0",
+      "severity": "low",
+      "description": "HuggingFace Transformers allows for arbitrary code execution in the `Trainer` class",
+      "constraint": ">= 0",
+      "fix_version": "5.0.0rc3",
+      "references": [
+        "https://nvd.nist.gov/vuln/detail/CVE-2026-1839",
+        "https://github.com/huggingface/transformers/commit/03c8082ba4594c9b8d6fe190ca9bed0e5f8ca396",
+        "https://github.com/huggingface/transformers",
+        "https://github.com/huggingface/transformers/releases/tag/v5.0.0rc3",
+        "https://huntr.com/bounties/3c77bb97-e493-493d-9a88-c57f5c536485"
+      ],
+      "source": "osv.dev"
+    },
+    {
+      "id": "GHSA-6rvg-6v2m-4j46",
+      "cve": "CVE-2024-12720",
+      "package": "transformers",
+      "version": "4.30.0",
+      "severity": "low",
+      "description": "Transformers Regular Expression Denial of Service (ReDoS) vulnerability",
+      "constraint": ">= 0",
+      "fix_version": "4.48.0",
+      "references": [
+        "https://nvd.nist.gov/vuln/detail/CVE-2024-12720",
+        "https://github.com/huggingface/transformers/commit/deac971c469bcbb182c2e52da0b82fb3bf54cccf",
+        "https://github.com/huggingface/transformers",
+        "https://huntr.com/bounties/4bed1214-7835-4252-a853-22bbad891f98"
+      ],
+      "source": "osv.dev"
+    },
+    {
+      "id": "GHSA-9356-575x-2w9m",
+      "cve": "CVE-2025-5197",
+      "package": "transformers",
+      "version": "4.30.0",
+      "severity": "low",
+      "description": "Hugging Face Transformers Regular Expression Denial of Service (ReDoS) vulnerability",
+      "constraint": ">= 0",
+      "fix_version": "4.53.0",
+      "references": [
+        "https://nvd.nist.gov/vuln/detail/CVE-2025-5197",
+        "https://github.com/huggingface/transformers/commit/701caef704e356dc2f9331cc3fd5df0eccb4720a",
+        "https://github.com/huggingface/transformers/commit/944b56000be5e9b61af8301aa340838770ad8a0b",
+        "https://github.com/huggingface/transformers",
+        "https://huntr.com/bounties/3f8b3fd0-166b-46e7-b60f-60dd9d2678bf"
+      ],
+      "source": "osv.dev"
+    },
+    {
+      "id": "GHSA-fpwr-67px-3qhx",
+      "cve": "CVE-2025-1194",
+      "package": "transformers",
+      "version": "4.30.0",
+      "severity": "low",
+      "description": "Transformers Regular Expression Denial of Service (ReDoS) vulnerability",
+      "constraint": ">= 0",
+      "fix_version": "4.50.0",
+      "references": [
+        "https://nvd.nist.gov/vuln/detail/CVE-2025-1194",
+        "https://github.com/huggingface/transformers/commit/92c5ca9dd70de3ade2af2eb835c96215cc50e815",
+        "https://github.com/huggingface/transformers",
+        "https://huntr.com/bounties/86f58dcd-683f-4adc-a735-849f51e9abb2"
+      ],
+      "source": "osv.dev"
+    },
+    {
+      "id": "GHSA-hxxf-235m-72v3",
+      "cve": "CVE-2024-11394",
+      "package": "transformers",
+      "version": "4.30.0",
+      "severity": "low",
+      "description": "Deserialization of Untrusted Data in Hugging Face Transformers",
+      "constraint": ">= 0",
+      "fix_version": "4.48.0",
+      "references": [
+        "https://nvd.nist.gov/vuln/detail/CVE-2024-11394",
+        "https://github.com/huggingface/transformers/issues/34840",
+        "https://github.com/huggingface/transformers/pull/35296",
+        "https://github.com/huggingface/transformers",
+        "https://github.com/pypa/advisory-database/tree/main/vulns/transformers/PYSEC-2024-229.yaml"
+      ],
+      "source": "osv.dev"
+    },
+    {
+      "id": "GHSA-jjph-296x-mrcr",
+      "cve": "CVE-2025-3264",
+      "package": "transformers",
+      "version": "4.30.0",
+      "severity": "low",
+      "description": "Transformers vulnerable to ReDoS attack through its get_imports() function",
+      "constraint": ">= 0",
+      "fix_version": "4.51.0",
+      "references": [
+        "https://nvd.nist.gov/vuln/detail/CVE-2025-3264",
+        "https://github.com/huggingface/transformers/commit/0720e206c6ba28887e4d60ef60a6a089f6c1cc76",
+        "https://github.com/huggingface/transformers/commit/126abe3461762e5fc180e7e614391d1b4ab051ca",
+        "https://github.com/huggingface/transformers",
+        "https://huntr.com/bounties/3c6f7822-9992-476d-8cf0-b0b1623427df"
+      ],
+      "source": "osv.dev"
+    },
+    {
+      "id": "GHSA-phhr-52qp-3mj4",
+      "cve": "CVE-2025-3777",
+      "package": "transformers",
+      "version": "4.30.0",
+      "severity": "low",
+      "description": "Transformers's Improper Input Validation vulnerability can be exploited through username injection",
+      "constraint": ">= 0",
+      "fix_version": "4.52.1",
+      "references": [
+        "https://nvd.nist.gov/vuln/detail/CVE-2025-3777",
+        "https://github.com/huggingface/transformers/commit/4dda5f71b35fb70cf602187eef84bb17a50b9082",
+        "https://github.com/huggingface/transformers",
+        "https://github.com/huggingface/transformers/blame/a7d2bbaaa8aac64f7c1ee8c1421cfe84b38359a4/src/transformers/image_utils.py",
+        "https://huntr.com/bounties/ccba0730-9248-4853-b7ff-5c20e6364f09"
+      ],
+      "source": "osv.dev"
+    },
+    {
+      "id": "GHSA-q2wp-rjmx-x6x9",
+      "cve": "CVE-2025-3263",
+      "package": "transformers",
+      "version": "4.30.0",
+      "severity": "low",
+      "description": "Transformers's ReDoS vulnerability in get_configuration_file can lead to catastrophic backtracking",
+      "constraint": ">= 0",
+      "fix_version": "4.51.0",
+      "references": [
+        "https://nvd.nist.gov/vuln/detail/CVE-2025-3263",
+        "https://github.com/huggingface/transformers/commit/0720e206c6ba28887e4d60ef60a6a089f6c1cc76",
+        "https://github.com/huggingface/transformers/commit/126abe3461762e5fc180e7e614391d1b4ab051ca",
+        "https://github.com/huggingface/transformers",
+        "https://huntr.com/bounties/c7a69150-54f8-4e81-8094-791e7a2a0f29"
+      ],
+      "source": "osv.dev"
+    },
+    {
+      "id": "GHSA-qq3j-4f4f-9583",
+      "cve": "CVE-2025-2099",
+      "package": "transformers",
+      "version": "4.30.0",
+      "severity": "low",
+      "description": "Hugging Face Transformers Regular Expression Denial of Service",
+      "constraint": ">= 0",
+      "fix_version": "4.50.0",
+      "references": [
+        "https://nvd.nist.gov/vuln/detail/CVE-2025-2099",
+        "https://github.com/huggingface/transformers/pull/36648",
+        "https://github.com/huggingface/transformers/commit/8cb522b4190bd556ce51be04942720650b1a3e57",
+        "https://github.com/huggingface/transformers",
+        "https://github.com/pypa/advisory-database/tree/main/vulns/transformers/PYSEC-2025-40.yaml"
+      ],
+      "source": "osv.dev"
+    },
+    {
+      "id": "GHSA-qxrp-vhvm-j765",
+      "cve": "CVE-2024-11392",
+      "package": "transformers",
+      "version": "4.30.0",
+      "severity": "low",
+      "description": "Deserialization of Untrusted Data in Hugging Face Transformers",
+      "constraint": ">= 0",
+      "fix_version": "4.48.0",
+      "references": [
+        "https://nvd.nist.gov/vuln/detail/CVE-2024-11392",
+        "https://github.com/huggingface/transformers/issues/34840",
+        "https://github.com/huggingface/transformers/pull/35296",
+        "https://github.com/huggingface/transformers",
+        "https://github.com/pypa/advisory-database/tree/main/vulns/transformers/PYSEC-2024-227.yaml"
+      ],
+      "source": "osv.dev"
+    },
+    {
+      "id": "GHSA-rcv9-qm8p-9p6j",
+      "cve": "CVE-2025-6051",
+      "package": "transformers",
+      "version": "4.30.0",
+      "severity": "low",
+      "description": "Hugging Face Transformers library has Regular Expression Denial of Service",
+      "constraint": ">= 0",
+      "fix_version": "4.53.0",
+      "references": [
+        "https://nvd.nist.gov/vuln/detail/CVE-2025-6051",
+        "https://github.com/huggingface/transformers/pull/38844",
+        "https://github.com/huggingface/transformers/commit/54a02160eb030da9be18231c77791f2eb3a52216",
+        "https://github.com/huggingface/transformers/commit/ba8eaba9865618253f997784aa565b96206426f0",
+        "https://github.com/huggingface/transformers"
+      ],
+      "source": "osv.dev"
+    },
+    {
+      "id": "GHSA-v68g-wm8c-6x7j",
+      "cve": "CVE-2023-7018",
+      "package": "transformers",
+      "version": "4.30.0",
+      "severity": "low",
+      "description": "transformers has a Deserialization of Untrusted Data vulnerability",
+      "constraint": ">= 0",
+      "fix_version": "4.36.0",
+      "references": [
+        "https://nvd.nist.gov/vuln/detail/CVE-2023-7018",
+        "https://github.com/huggingface/transformers/commit/1d63b0ec361e7a38f1339385e8a5a855085532ce",
+        "https://github.com/huggingface/transformers",
+        "https://github.com/pypa/advisory-database/tree/main/vulns/transformers/PYSEC-2023-301.yaml",
+        "https://huntr.com/bounties/e1a3e548-e53a-48df-b708-9ee62140963c"
+      ],
+      "source": "osv.dev"
+    },
+    {
+      "id": "GHSA-wrfc-pvp9-mr9g",
+      "cve": "CVE-2024-11393",
+      "package": "transformers",
+      "version": "4.30.0",
+      "severity": "low",
+      "description": "Deserialization of Untrusted Data in Hugging Face Transformers",
+      "constraint": ">= 0",
+      "fix_version": "4.48.0",
+      "references": [
+        "https://nvd.nist.gov/vuln/detail/CVE-2024-11393",
+        "https://github.com/huggingface/transformers/issues/34840",
+        "https://github.com/huggingface/transformers/pull/35296",
+        "https://github.com/huggingface/transformers",
+        "https://github.com/pypa/advisory-database/tree/main/vulns/transformers/PYSEC-2024-228.yaml"
+      ],
+      "source": "osv.dev"
+    },
+    {
+      "id": "PYSEC-2023-300",
+      "cve": "CVE-2023-6730",
+      "package": "transformers",
+      "version": "4.30.0",
+      "severity": "low",
+      "description": "Deserialization of Untrusted Data in GitHub repository huggingface/transformers prior to 4.36.",
+      "constraint": ">= 0",
+      "fix_version": "1d63b0ec361e7a38f1339385e8a5a855085532ce",
+      "references": [
+        "https://huntr.com/bounties/423611ee-7a2a-442a-babb-3ed2f8385c16",
+        "https://github.com/huggingface/transformers/commit/1d63b0ec361e7a38f1339385e8a5a855085532ce"
+      ],
+      "source": "osv.dev"
+    },
+    {
+      "id": "PYSEC-2023-301",
+      "cve": "CVE-2023-7018",
+      "package": "transformers",
+      "version": "4.30.0",
+      "severity": "low",
+      "description": "Deserialization of Untrusted Data in GitHub repository huggingface/transformers prior to 4.36.",
+      "constraint": ">= 0",
+      "fix_version": "1d63b0ec361e7a38f1339385e8a5a855085532ce",
+      "references": [
+        "https://huntr.com/bounties/e1a3e548-e53a-48df-b708-9ee62140963c",
+        "https://github.com/huggingface/transformers/commit/1d63b0ec361e7a38f1339385e8a5a855085532ce"
+      ],
+      "source": "osv.dev"
+    },
+    {
+      "id": "PYSEC-2024-227",
+      "cve": "CVE-2024-11392",
+      "package": "transformers",
+      "version": "4.30.0",
+      "severity": "low",
+      "description": "Hugging Face Transformers MobileViTV2 Deserialization of Untrusted Data Remote Code Execution Vulnerability. This vulnerability allows remote attackers to execute arbitrary code on affected installations of Hugging Face Transformers. User interaction is required to exploit this vulnerability in that the target must visit a malicious page or open a malicious file.\n\nThe specific flaw exists within the handling of configuration files. The issue results from the lack of proper validation of user-sup",
+      "constraint": ">= 0",
+      "fix_version": "4.48.0",
+      "references": [
+        "https://www.zerodayinitiative.com/advisories/ZDI-24-1513/"
+      ],
+      "source": "osv.dev"
+    },
+    {
+      "id": "PYSEC-2024-228",
+      "cve": "CVE-2024-11393",
+      "package": "transformers",
+      "version": "4.30.0",
+      "severity": "low",
+      "description": "Hugging Face Transformers MaskFormer Model Deserialization of Untrusted Data Remote Code Execution Vulnerability. This vulnerability allows remote attackers to execute arbitrary code on affected installations of Hugging Face Transformers. User interaction is required to exploit this vulnerability in that the target must visit a malicious page or open a malicious file.\n\nThe specific flaw exists within the parsing of model files. The issue results from the lack of proper validation of user-supplie",
+      "constraint": ">= 0",
+      "fix_version": "4.48.0",
+      "references": [
+        "https://www.zerodayinitiative.com/advisories/ZDI-24-1514/"
+      ],
+      "source": "osv.dev"
+    },
+    {
+      "id": "PYSEC-2024-229",
+      "cve": "CVE-2024-11394",
+      "package": "transformers",
+      "version": "4.30.0",
+      "severity": "low",
+      "description": "Hugging Face Transformers Trax Model Deserialization of Untrusted Data Remote Code Execution Vulnerability. This vulnerability allows remote attackers to execute arbitrary code on affected installations of Hugging Face Transformers. User interaction is required to exploit this vulnerability in that the target must visit a malicious page or open a malicious file.\n\nThe specific flaw exists within the handling of model files. The issue results from the lack of proper validation of user-supplied dat",
+      "constraint": ">= 0",
+      "fix_version": "4.48.0",
+      "references": [
+        "https://www.zerodayinitiative.com/advisories/ZDI-24-1515/"
+      ],
+      "source": "osv.dev"
+    },
+    {
+      "id": "PYSEC-2025-40",
+      "cve": "CVE-2025-2099",
+      "package": "transformers",
+      "version": "4.30.0",
+      "severity": "low",
+      "description": "A vulnerability in the `preprocess_string()` function of the `transformers.testing_utils` module in huggingface/transformers version v4.48.3 allows for a Regular Expression Denial of Service (ReDoS) attack. The regular expression used to process code blocks in docstrings contains nested quantifiers, leading to exponential backtracking when processing input with a large number of newline characters. An attacker can exploit this by providing a specially crafted payload, causing high CPU usage and ",
+      "constraint": ">= 0",
+      "fix_version": "8cb522b4190bd556ce51be04942720650b1a3e57",
+      "references": [
+        "https://huntr.com/bounties/97b780f3-ffca-424f-ad5d-0e1c57a5bde4",
+        "https://github.com/huggingface/transformers/commit/8cb522b4190bd556ce51be04942720650b1a3e57"
+      ],
+      "source": "osv.dev"
+    }
+  ],
+  "enrichment": {
+    "source": "osv.dev",
+    "timestamp": "2026-04-26 06:40 UTC",
+    "queried": 4,
+    "cached": 1,
+    "components_considered": 5
+  }
+}
+</script>
+</body>
+</html>

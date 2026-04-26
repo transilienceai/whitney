@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="whitney 0.2.0">
+<title>Whitney scan report</title>
+<style>
+:root {
+  --bg: #ffffff;
+  --fg: #1f2937;
+  --fg-muted: #6b7280;
+  --card-bg: #ffffff;
+  --card-border: #e5e7eb;
+  --code-bg: #f9fafb;
+  --code-border: #e5e7eb;
+  --accent: #0891b2;
+  --shadow: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.06);
+  --radius: 8px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f172a;
+    --fg: #e2e8f0;
+    --fg-muted: #94a3b8;
+    --card-bg: #1e293b;
+    --card-border: #334155;
+    --code-bg: #0b1220;
+    --code-border: #334155;
+    --shadow: 0 1px 3px rgba(0,0,0,0.4);
+  }
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+               Helvetica, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+.wrap { max-width: 1200px; margin: 0 auto; padding: 32px 24px 64px; }
+header {
+  border-bottom: 1px solid var(--card-border);
+  margin-bottom: 32px;
+  padding-bottom: 16px;
+}
+header .brand {
+  font-size: 0.75rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent);
+  font-weight: 700;
+}
+header h1 { margin: 4px 0 4px; font-size: 1.75rem; font-weight: 700; }
+header .sub { color: var(--fg-muted); font-size: 0.9rem; }
+nav.sticky {
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  border-bottom: 1px solid var(--card-border);
+  padding: 12px 0;
+  margin-bottom: 24px;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 0.875rem;
+}
+nav.sticky a { color: var(--fg-muted); text-decoration: none; }
+nav.sticky a:hover { color: var(--accent); }
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+  margin-bottom: 32px;
+}
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  box-shadow: var(--shadow);
+}
+.card .num { font-size: 2.25rem; font-weight: 700; line-height: 1; }
+.card .lbl {
+  color: var(--fg-muted);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-top: 8px;
+}
+section { margin-bottom: 40px; }
+section > h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0 0 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--card-border);
+}
+.sev-header {
+  position: sticky;
+  top: 56px;
+  background: var(--bg);
+  padding: 12px 0;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-weight: 600;
+  font-size: 1rem;
+  border-bottom: 1px solid var(--card-border);
+  margin-bottom: 12px;
+}
+.badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: white;
+}
+.finding {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  margin-bottom: 16px;
+  box-shadow: var(--shadow);
+}
+.finding .meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  font-size: 0.875rem;
+  color: var(--fg-muted);
+  margin-bottom: 8px;
+}
+.finding .meta a { color: var(--accent); text-decoration: none; }
+.finding .meta a:hover { text-decoration: underline; }
+.finding .check-id {
+  font-family: "JetBrains Mono", "SF Mono", Consolas, monospace;
+  font-size: 0.8rem;
+  color: var(--fg-muted);
+}
+.finding .title { font-weight: 600; margin: 8px 0; }
+pre.code {
+  background: var(--code-bg);
+  border: 1px solid var(--code-border);
+  border-radius: 6px;
+  padding: 12px 16px;
+  overflow-x: auto;
+  font-family: "JetBrains Mono", "SF Mono", Consolas,
+               "Liberation Mono", monospace;
+  font-size: 0.8rem;
+  line-height: 1.55;
+  margin: 12px 0;
+  white-space: pre;
+}
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 12px 0 4px;
+}
+.chip {
+  display: inline-block;
+  padding: 2px 8px;
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  font-size: 0.7rem;
+  font-family: "JetBrains Mono", "SF Mono", Consolas, monospace;
+  color: var(--fg-muted);
+  background: var(--code-bg);
+}
+details {
+  margin-top: 12px;
+  font-size: 0.9rem;
+}
+details summary {
+  cursor: pointer;
+  color: var(--accent);
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+details > p { margin: 8px 0 0; color: var(--fg); }
+.provider-strip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-radius: 6px;
+  margin: 24px 0 12px;
+  color: white;
+  font-weight: 600;
+}
+.provider-strip .count {
+  font-weight: 400;
+  opacity: 0.9;
+  font-size: 0.85rem;
+}
+table.components {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+table.components th, table.components td {
+  text-align: left;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--card-border);
+}
+table.components th {
+  background: var(--code-bg);
+  font-weight: 600;
+  color: var(--fg-muted);
+  text-transform: uppercase;
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+}
+table.components td.purl {
+  font-family: "JetBrains Mono", "SF Mono", Consolas, monospace;
+  font-size: 0.75rem;
+  color: var(--fg-muted);
+}
+.vuln {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-left: 4px solid #dc2626;
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  margin-bottom: 12px;
+  box-shadow: var(--shadow);
+}
+.vuln .id {
+  font-family: "JetBrains Mono", "SF Mono", Consolas, monospace;
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+.vuln .pkg {
+  font-family: "JetBrains Mono", "SF Mono", Consolas, monospace;
+  font-size: 0.8rem;
+  color: var(--fg-muted);
+  margin-left: 8px;
+}
+.vuln .desc { margin: 8px 0; }
+.vuln .meta {
+  font-size: 0.8rem;
+  color: var(--fg-muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.vuln .meta a { color: var(--accent); text-decoration: none; }
+.vuln .meta a:hover { text-decoration: underline; }
+.empty {
+  padding: 24px;
+  text-align: center;
+  color: var(--fg-muted);
+  background: var(--code-bg);
+  border-radius: var(--radius);
+  font-style: italic;
+}
+footer {
+  margin-top: 48px;
+  padding-top: 16px;
+  border-top: 1px solid var(--card-border);
+  font-size: 0.8rem;
+  color: var(--fg-muted);
+}
+footer a { color: var(--accent); text-decoration: none; }
+@media (max-width: 600px) {
+  .wrap { padding: 16px 12px 32px; }
+  header h1 { font-size: 1.4rem; }
+  nav.sticky { font-size: 0.8rem; gap: 8px; }
+  .sev-header { top: 84px; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div class="brand">Whitney v0.2.0</div>
+  <h1>Whitney scan report</h1>
+  <div class="sub">Scanned <code>C:\Users\KKMOOK~1\AppData\Local\Temp\whitney-sample-i6mebrfi</code> · 2026-04-26 06:40 UTC · 7 findings</div>
+</header>
+<div class="cards"><div class="card" style="border-top:4px solid #dc2626"><div class="num">1</div><div class="lbl">Critical</div></div><div class="card" style="border-top:4px solid #ea580c"><div class="num">6</div><div class="lbl">High</div></div><div class="card" style="border-top:4px solid #d97706"><div class="num">0</div><div class="lbl">Medium</div></div><div class="card" style="border-top:4px solid #65a30d"><div class="num">0</div><div class="lbl">Low</div></div><div class="card" style="border-top:4px solid #0891b2"><div class="num">0</div><div class="lbl">Info</div></div><div class="card" style="border-top:4px solid var(--accent)"><div class="num">7</div><div class="lbl">Total findings</div></div></div><nav class="sticky"><a href="#findings">Findings</a></nav><section id="findings"><h2>Findings</h2><div class="sev-header"><span class="badge" style="background:#dc2626">Critical</span> <span>1 critical finding</span></div><article class="finding">
+  <div class="meta">
+    <span class="badge" style="background:#dc2626">Critical</span>
+    <span class="check-id">code-prompt-injection-risk</span>
+    <a href="vscode://file/C:%5CUsers%5Ckkmookhey%5CAppData%5CLocal%5CTemp%5Cwhitney-sample-i6mebrfi%5Csrc%5Capp_005_broken_llm_p2sql_lv1.py:33" title="Open in VS Code">C:\Users\KKMOOK~1\AppData\Local\Temp\whitney-sample-i6mebrfi\src\app_005_broken_llm_p2sql_lv1.py:33</a>
+  </div>
+  <div class="title">LangChain/LlamaIndex SQL chain or agent detected. These sinks execute LLM-generated SQL directly against the configured </div>
+  <pre class="code">requires login</pre>
+  <div class="tags"><span class="chip">CWE-94</span><span class="chip">CWE-89</span><span class="chip">LLM01:2025</span><span class="chip">AA01:2026</span><span class="chip">langchain</span><span class="chip">llamaindex</span><span class="chip">conf: HIGH</span></div>
+  <details><summary>Remediation</summary><p>Apply LLM-as-judge on user input AND scope DB credentials to read-only, allowlisted tables. Parameterised queries do not help here because the chain generates the whole query including the table names and predicates. The defence is to constrain what the LLM is allowed to request AND what the DB account is allowed to run. Consider using LlamaIndex&#x27;s ``NLSQLRetriever`` (retrieval- only) instead of a full SQL agent where possible.</p></details>
+  
+</article><div class="sev-header"><span class="badge" style="background:#ea580c">High</span> <span>6 high findings</span></div><article class="finding">
+  <div class="meta">
+    <span class="badge" style="background:#ea580c">High</span>
+    <span class="check-id">code-prompt-injection-risk</span>
+    <a href="vscode://file/C:%5CUsers%5Ckkmookhey%5CAppData%5CLocal%5CTemp%5Cwhitney-sample-i6mebrfi%5Csrc%5Capp_001_flask_unvalidated_fstring.py:13" title="Open in VS Code">C:\Users\KKMOOK~1\AppData\Local\Temp\whitney-sample-i6mebrfi\src\app_001_flask_unvalidated_fstring.py:13</a>
+  </div>
+  <div class="title">Untrusted input reaches an LLM call without passing through a recognised guardrail. Apply AWS Bedrock Guardrails, NeMo G</div>
+  <pre class="code">requires login</pre>
+  <div class="tags"><span class="chip">CWE-94</span><span class="chip">LLM01:2025</span><span class="chip">AA01:2026</span><span class="chip">openai</span><span class="chip">anthropic</span><span class="chip">langchain</span><span class="chip">llamaindex</span><span class="chip">streamlit</span><span class="chip">flask</span><span class="chip">fastapi</span><span class="chip">django</span><span class="chip">conf: MEDIUM</span></div>
+  <details><summary>Remediation</summary><p>Route untrusted input through a recognised guardrail before the LLM call. See Whitney&#x27;s recognised-guardrail list for supported vendors. Weak defences do not count â€” replace them with a dedicated AI firewall or LLM-as-judge.</p></details>
+  
+</article><article class="finding">
+  <div class="meta">
+    <span class="badge" style="background:#ea580c">High</span>
+    <span class="check-id">code-prompt-injection-risk</span>
+    <a href="vscode://file/C:%5CUsers%5Ckkmookhey%5CAppData%5CLocal%5CTemp%5Cwhitney-sample-i6mebrfi%5Csrc%5Capp_002_indirect_rag_unfiltered_retrieval.py:25" title="Open in VS Code">C:\Users\KKMOOK~1\AppData\Local\Temp\whitney-sample-i6mebrfi\src\app_002_indirect_rag_unfiltered_retrieval.py:25</a>
+  </div>
+  <div class="title">Untrusted input reaches an LLM call without passing through a recognised guardrail. Apply AWS Bedrock Guardrails, NeMo G</div>
+  <pre class="code">requires login</pre>
+  <div class="tags"><span class="chip">CWE-94</span><span class="chip">LLM01:2025</span><span class="chip">AA01:2026</span><span class="chip">openai</span><span class="chip">anthropic</span><span class="chip">langchain</span><span class="chip">llamaindex</span><span class="chip">streamlit</span><span class="chip">flask</span><span class="chip">fastapi</span><span class="chip">django</span><span class="chip">conf: MEDIUM</span></div>
+  <details><summary>Remediation</summary><p>Route untrusted input through a recognised guardrail before the LLM call. See Whitney&#x27;s recognised-guardrail list for supported vendors. Weak defences do not count â€” replace them with a dedicated AI firewall or LLM-as-judge.</p></details>
+  
+</article><article class="finding">
+  <div class="meta">
+    <span class="badge" style="background:#ea580c">High</span>
+    <span class="check-id">code-prompt-injection-risk</span>
+    <a href="vscode://file/C:%5CUsers%5Ckkmookhey%5CAppData%5CLocal%5CTemp%5Cwhitney-sample-i6mebrfi%5Csrc%5Capp_002_indirect_rag_unfiltered_retrieval.py:31" title="Open in VS Code">C:\Users\KKMOOK~1\AppData\Local\Temp\whitney-sample-i6mebrfi\src\app_002_indirect_rag_unfiltered_retrieval.py:31</a>
+  </div>
+  <div class="title">Untrusted input reaches an LLM call without passing through a recognised guardrail. Apply AWS Bedrock Guardrails, NeMo G</div>
+  <pre class="code">requires login</pre>
+  <div class="tags"><span class="chip">CWE-94</span><span class="chip">LLM01:2025</span><span class="chip">AA01:2026</span><span class="chip">openai</span><span class="chip">anthropic</span><span class="chip">langchain</span><span class="chip">llamaindex</span><span class="chip">streamlit</span><span class="chip">flask</span><span class="chip">fastapi</span><span class="chip">django</span><span class="chip">conf: MEDIUM</span></div>
+  <details><summary>Remediation</summary><p>Route untrusted input through a recognised guardrail before the LLM call. See Whitney&#x27;s recognised-guardrail list for supported vendors. Weak defences do not count â€” replace them with a dedicated AI firewall or LLM-as-judge.</p></details>
+  
+</article><article class="finding">
+  <div class="meta">
+    <span class="badge" style="background:#ea580c">High</span>
+    <span class="check-id">code-prompt-injection-risk</span>
+    <a href="vscode://file/C:%5CUsers%5Ckkmookhey%5CAppData%5CLocal%5CTemp%5Cwhitney-sample-i6mebrfi%5Csrc%5Capp_003_indirect_web_fetch_summarize.py:16" title="Open in VS Code">C:\Users\KKMOOK~1\AppData\Local\Temp\whitney-sample-i6mebrfi\src\app_003_indirect_web_fetch_summarize.py:16</a>
+  </div>
+  <div class="title">Untrusted input reaches an LLM call without passing through a recognised guardrail. Apply AWS Bedrock Guardrails, NeMo G</div>
+  <pre class="code">requires login</pre>
+  <div class="tags"><span class="chip">CWE-94</span><span class="chip">LLM01:2025</span><span class="chip">AA01:2026</span><span class="chip">openai</span><span class="chip">anthropic</span><span class="chip">langchain</span><span class="chip">llamaindex</span><span class="chip">streamlit</span><span class="chip">flask</span><span class="chip">fastapi</span><span class="chip">django</span><span class="chip">conf: MEDIUM</span></div>
+  <details><summary>Remediation</summary><p>Route untrusted input through a recognised guardrail before the LLM call. See Whitney&#x27;s recognised-guardrail list for supported vendors. Weak defences do not count â€” replace them with a dedicated AI firewall or LLM-as-judge.</p></details>
+  
+</article><article class="finding">
+  <div class="meta">
+    <span class="badge" style="background:#ea580c">High</span>
+    <span class="check-id">code-prompt-injection-risk</span>
+    <a href="vscode://file/C:%5CUsers%5Ckkmookhey%5CAppData%5CLocal%5CTemp%5Cwhitney-sample-i6mebrfi%5Csrc%5Capp_006_indirect_tool_response_agent.py:23" title="Open in VS Code">C:\Users\KKMOOK~1\AppData\Local\Temp\whitney-sample-i6mebrfi\src\app_006_indirect_tool_response_agent.py:23</a>
+  </div>
+  <div class="title">Untrusted input reaches an LLM call without passing through a recognised guardrail. Apply AWS Bedrock Guardrails, NeMo G</div>
+  <pre class="code">requires login</pre>
+  <div class="tags"><span class="chip">CWE-94</span><span class="chip">LLM01:2025</span><span class="chip">AA01:2026</span><span class="chip">openai</span><span class="chip">anthropic</span><span class="chip">langchain</span><span class="chip">llamaindex</span><span class="chip">streamlit</span><span class="chip">flask</span><span class="chip">fastapi</span><span class="chip">django</span><span class="chip">conf: MEDIUM</span></div>
+  <details><summary>Remediation</summary><p>Route untrusted input through a recognised guardrail before the LLM call. See Whitney&#x27;s recognised-guardrail list for supported vendors. Weak defences do not count â€” replace them with a dedicated AI firewall or LLM-as-judge.</p></details>
+  
+</article><article class="finding">
+  <div class="meta">
+    <span class="badge" style="background:#ea580c">High</span>
+    <span class="check-id">code-prompt-injection-risk</span>
+    <a href="vscode://file/C:%5CUsers%5Ckkmookhey%5CAppData%5CLocal%5CTemp%5Cwhitney-sample-i6mebrfi%5Csrc%5Capp_008_indirect_mcp_tool_response.py:26" title="Open in VS Code">C:\Users\KKMOOK~1\AppData\Local\Temp\whitney-sample-i6mebrfi\src\app_008_indirect_mcp_tool_response.py:26</a>
+  </div>
+  <div class="title">Untrusted input reaches an LLM call without passing through a recognised guardrail. Apply AWS Bedrock Guardrails, NeMo G</div>
+  <pre class="code">requires login</pre>
+  <div class="tags"><span class="chip">CWE-94</span><span class="chip">LLM01:2025</span><span class="chip">AA01:2026</span><span class="chip">openai</span><span class="chip">anthropic</span><span class="chip">langchain</span><span class="chip">llamaindex</span><span class="chip">streamlit</span><span class="chip">flask</span><span class="chip">fastapi</span><span class="chip">django</span><span class="chip">conf: MEDIUM</span></div>
+  <details><summary>Remediation</summary><p>Route untrusted input through a recognised guardrail before the LLM call. See Whitney&#x27;s recognised-guardrail list for supported vendors. Weak defences do not count â€” replace them with a dedicated AI firewall or LLM-as-judge.</p></details>
+  
+</article></section>
+<footer>
+  Generated 2026-04-26 06:40 UTC by
+  <a href="https://github.com/transilienceai/whitney">Whitney</a>
+  v0.2.0.
+</footer>
+</div>
+<script type="application/json" id="whitney-data">
+[
+  {
+    "check_id": "code-prompt-injection-risk",
+    "title": "LangChain/LlamaIndex SQL chain or agent detected. These sinks execute LLM-generated SQL directly against the configured ",
+    "description": "LangChain/LlamaIndex SQL chain or agent detected. These sinks execute LLM-generated SQL directly against the configured database, so any prompt injection reaching them produces arbitrary SQL execution. This is the P2SQL (prompt-to-SQL) attack class, first formally described by Pedro et al. (2023) \"From Prompt Injections to SQL Injection Attacks: How Protected is Your LLM-Integrated Web Application?\"",
+    "severity": "critical",
+    "status": "fail",
+    "domain": "ai_governance",
+    "resource_type": "Code::Repository::File",
+    "resource_id": "C:\\Users\\KKMOOK~1\\AppData\\Local\\Temp\\whitney-sample-i6mebrfi\\src\\app_005_broken_llm_p2sql_lv1.py",
+    "region": "code",
+    "account_id": "code-scan",
+    "remediation": "Apply LLM-as-judge on user input AND scope DB credentials to read-only, allowlisted tables. Parameterised queries do not help here because the chain generates the whole query including the table names and predicates. The defence is to constrain what the LLM is allowed to request AND what the DB account is allowed to run. Consider using LlamaIndex's ``NLSQLRetriever`` (retrieval- only) instead of a full SQL agent where possible.\n",
+    "soc2_controls": [],
+    "cis_aws_controls": [],
+    "cis_azure_controls": [],
+    "mcsb_controls": [],
+    "iso27001_controls": [],
+    "hipaa_controls": [],
+    "details": {
+      "file_path": "C:\\Users\\KKMOOK~1\\AppData\\Local\\Temp\\whitney-sample-i6mebrfi\\src\\app_005_broken_llm_p2sql_lv1.py",
+      "line_number": 33,
+      "end_line": 33,
+      "code_snippet": "requires login",
+      "semgrep_rule_id": "whitney.rules.code-prompt-injection-risk-langchain-sql-chain",
+      "engine": "semgrep",
+      "cwe": [
+        "CWE-94",
+        "CWE-89"
+      ],
+      "owasp": [
+        "LLM01:2025"
+      ],
+      "owasp_agentic": [
+        "AA01:2026"
+      ],
+      "confidence": "HIGH",
+      "technology": [
+        "langchain",
+        "llamaindex"
+      ]
+    }
+  },
+  {
+    "check_id": "code-prompt-injection-risk",
+    "title": "Untrusted input reaches an LLM call without passing through a recognised guardrail. Apply AWS Bedrock Guardrails, NeMo G",
+    "description": "Untrusted input reaches an LLM call without passing through a recognised guardrail. Apply AWS Bedrock Guardrails, NeMo Guardrails, Lakera Guard, Azure AI Content Safety / Prompt Shields, OpenAI Moderation, DeepKeep, or a correct LLM-as-Judge pre-call before invocation. Weak defences (Pydantic regex validation, length caps, keyword blocklists) are not recognised \u00e2\u20ac\u201d they are bypassable via Unicode, Cyrillic homoglyphs, Base64, language switching, paraphrase, or token splitting.",
+    "severity": "high",
+    "status": "fail",
+    "domain": "ai_governance",
+    "resource_type": "Code::Repository::File",
+    "resource_id": "C:\\Users\\KKMOOK~1\\AppData\\Local\\Temp\\whitney-sample-i6mebrfi\\src\\app_001_flask_unvalidated_fstring.py",
+    "region": "code",
+    "account_id": "code-scan",
+    "remediation": "Route untrusted input through a recognised guardrail before the LLM call. See Whitney's recognised-guardrail list for supported vendors. Weak defences do not count \u00e2\u20ac\u201d replace them with a dedicated AI firewall or LLM-as-judge.\n",
+    "soc2_controls": [
+      "CC6.1",
+      "CC7.2"
+    ],
+    "cis_aws_controls": [],
+    "cis_azure_controls": [],
+    "mcsb_controls": [],
+    "iso27001_controls": [],
+    "hipaa_controls": [],
+    "details": {
+      "file_path": "C:\\Users\\KKMOOK~1\\AppData\\Local\\Temp\\whitney-sample-i6mebrfi\\src\\app_001_flask_unvalidated_fstring.py",
+      "line_number": 13,
+      "end_line": 16,
+      "code_snippet": "requires login",
+      "semgrep_rule_id": "whitney.rules.code-prompt-injection-risk",
+      "engine": "semgrep",
+      "cwe": [
+        "CWE-94"
+      ],
+      "owasp": [
+        "LLM01:2025"
+      ],
+      "owasp_agentic": [
+        "AA01:2026"
+      ],
+      "confidence": "MEDIUM",
+      "technology": [
+        "openai",
+        "anthropic",
+        "langchain",
+        "llamaindex",
+        "streamlit",
+        "flask",
+        "fastapi",
+        "django"
+      ]
+    }
+  },
+  {
+    "check_id": "code-prompt-injection-risk",
+    "title": "Untrusted input reaches an LLM call without passing through a recognised guardrail. Apply AWS Bedrock Guardrails, NeMo G",
+    "description": "Untrusted input reaches an LLM call without passing through a recognised guardrail. Apply AWS Bedrock Guardrails, NeMo Guardrails, Lakera Guard, Azure AI Content Safety / Prompt Shields, OpenAI Moderation, DeepKeep, or a correct LLM-as-Judge pre-call before invocation. Weak defences (Pydantic regex validation, length caps, keyword blocklists) are not recognised \u00e2\u20ac\u201d they are bypassable via Unicode, Cyrillic homoglyphs, Base64, language switching, paraphrase, or token splitting.",
+    "severity": "high",
+    "status": "fail",
+    "domain": "ai_governance",
+    "resource_type": "Code::Repository::File",
+    "resource_id": "C:\\Users\\KKMOOK~1\\AppData\\Local\\Temp\\whitney-sample-i6mebrfi\\src\\app_002_indirect_rag_unfiltered_retrieval.py",
+    "region": "code",
+    "account_id": "code-scan",
+    "remediation": "Route untrusted input through a recognised guardrail before the LLM call. See Whitney's recognised-guardrail list for supported vendors. Weak defences do not count \u00e2\u20ac\u201d replace them with a dedicated AI firewall or LLM-as-judge.\n",
+    "soc2_controls": [
+      "CC6.1",
+      "CC7.2"
+    ],
+    "cis_aws_controls": [],
+    "cis_azure_controls": [],
+    "mcsb_controls": [],
+    "iso27001_controls": [],
+    "hipaa_controls": [],
+    "details": {
+      "file_path": "C:\\Users\\KKMOOK~1\\AppData\\Local\\Temp\\whitney-sample-i6mebrfi\\src\\app_002_indirect_rag_unfiltered_retrieval.py",
+      "line_number": 25,
+      "end_line": 25,
+      "code_snippet": "requires login",
+      "semgrep_rule_id": "whitney.rules.code-prompt-injection-risk",
+      "engine": "semgrep",
+      "cwe": [
+        "CWE-94"
+      ],
+      "owasp": [
+        "LLM01:2025"
+      ],
+      "owasp_agentic": [
+        "AA01:2026"
+      ],
+      "confidence": "MEDIUM",
+      "technology": [
+        "openai",
+        "anthropic",
+        "langchain",
+        "llamaindex",
+        "streamlit",
+        "flask",
+        "fastapi",
+        "django"
+      ]
+    }
+  },
+  {
+    "check_id": "code-prompt-injection-risk",
+    "title": "Untrusted input reaches an LLM call without passing through a recognised guardrail. Apply AWS Bedrock Guardrails, NeMo G",
+    "description": "Untrusted input reaches an LLM call without passing through a recognised guardrail. Apply AWS Bedrock Guardrails, NeMo Guardrails, Lakera Guard, Azure AI Content Safety / Prompt Shields, OpenAI Moderation, DeepKeep, or a correct LLM-as-Judge pre-call before invocation. Weak defences (Pydantic regex validation, length caps, keyword blocklists) are not recognised \u00e2\u20ac\u201d they are bypassable via Unicode, Cyrillic homoglyphs, Base64, language switching, paraphrase, or token splitting.",
+    "severity": "high",
+    "status": "fail",
+    "domain": "ai_governance",
+    "resource_type": "Code::Repository::File",
+    "resource_id": "C:\\Users\\KKMOOK~1\\AppData\\Local\\Temp\\whitney-sample-i6mebrfi\\src\\app_002_indirect_rag_unfiltered_retrieval.py",
+    "region": "code",
+    "account_id": "code-scan",
+    "remediation": "Route untrusted input through a recognised guardrail before the LLM call. See Whitney's recognised-guardrail list for supported vendors. Weak defences do not count \u00e2\u20ac\u201d replace them with a dedicated AI firewall or LLM-as-judge.\n",
+    "soc2_controls": [
+      "CC6.1",
+      "CC7.2"
+    ],
+    "cis_aws_controls": [],
+    "cis_azure_controls": [],
+    "mcsb_controls": [],
+    "iso27001_controls": [],
+    "hipaa_controls": [],
+    "details": {
+      "file_path": "C:\\Users\\KKMOOK~1\\AppData\\Local\\Temp\\whitney-sample-i6mebrfi\\src\\app_002_indirect_rag_unfiltered_retrieval.py",
+      "line_number": 31,
+      "end_line": 34,
+      "code_snippet": "requires login",
+      "semgrep_rule_id": "whitney.rules.code-prompt-injection-risk",
+      "engine": "semgrep",
+      "cwe": [
+        "CWE-94"
+      ],
+      "owasp": [
+        "LLM01:2025"
+      ],
+      "owasp_agentic": [
+        "AA01:2026"
+      ],
+      "confidence": "MEDIUM",
+      "technology": [
+        "openai",
+        "anthropic",
+        "langchain",
+        "llamaindex",
+        "streamlit",
+        "flask",
+        "fastapi",
+        "django"
+      ]
+    }
+  },
+  {
+    "check_id": "code-prompt-injection-risk",
+    "title": "Untrusted input reaches an LLM call without passing through a recognised guardrail. Apply AWS Bedrock Guardrails, NeMo G",
+    "description": "Untrusted input reaches an LLM call without passing through a recognised guardrail. Apply AWS Bedrock Guardrails, NeMo Guardrails, Lakera Guard, Azure AI Content Safety / Prompt Shields, OpenAI Moderation, DeepKeep, or a correct LLM-as-Judge pre-call before invocation. Weak defences (Pydantic regex validation, length caps, keyword blocklists) are not recognised \u00e2\u20ac\u201d they are bypassable via Unicode, Cyrillic homoglyphs, Base64, language switching, paraphrase, or token splitting.",
+    "severity": "high",
+    "status": "fail",
+    "domain": "ai_governance",
+    "resource_type": "Code::Repository::File",
+    "resource_id": "C:\\Users\\KKMOOK~1\\AppData\\Local\\Temp\\whitney-sample-i6mebrfi\\src\\app_003_indirect_web_fetch_summarize.py",
+    "region": "code",
+    "account_id": "code-scan",
+    "remediation": "Route untrusted input through a recognised guardrail before the LLM call. See Whitney's recognised-guardrail list for supported vendors. Weak defences do not count \u00e2\u20ac\u201d replace them with a dedicated AI firewall or LLM-as-judge.\n",
+    "soc2_controls": [
+      "CC6.1",
+      "CC7.2"
+    ],
+    "cis_aws_controls": [],
+    "cis_azure_controls": [],
+    "mcsb_controls": [],
+    "iso27001_controls": [],
+    "hipaa_controls": [],
+    "details": {
+      "file_path": "C:\\Users\\KKMOOK~1\\AppData\\Local\\Temp\\whitney-sample-i6mebrfi\\src\\app_003_indirect_web_fetch_summarize.py",
+      "line_number": 16,
+      "end_line": 25,
+      "code_snippet": "requires login",
+      "semgrep_rule_id": "whitney.rules.code-prompt-injection-risk",
+      "engine": "semgrep",
+      "cwe": [
+        "CWE-94"
+      ],
+      "owasp": [
+        "LLM01:2025"
+      ],
+      "owasp_agentic": [
+        "AA01:2026"
+      ],
+      "confidence": "MEDIUM",
+      "technology": [
+        "openai",
+        "anthropic",
+        "langchain",
+        "llamaindex",
+        "streamlit",
+        "flask",
+        "fastapi",
+        "django"
+      ]
+    }
+  },
+  {
+    "check_id": "code-prompt-injection-risk",
+    "title": "Untrusted input reaches an LLM call without passing through a recognised guardrail. Apply AWS Bedrock Guardrails, NeMo G",
+    "description": "Untrusted input reaches an LLM call without passing through a recognised guardrail. Apply AWS Bedrock Guardrails, NeMo Guardrails, Lakera Guard, Azure AI Content Safety / Prompt Shields, OpenAI Moderation, DeepKeep, or a correct LLM-as-Judge pre-call before invocation. Weak defences (Pydantic regex validation, length caps, keyword blocklists) are not recognised \u00e2\u20ac\u201d they are bypassable via Unicode, Cyrillic homoglyphs, Base64, language switching, paraphrase, or token splitting.",
+    "severity": "high",
+    "status": "fail",
+    "domain": "ai_governance",
+    "resource_type": "Code::Repository::File",
+    "resource_id": "C:\\Users\\KKMOOK~1\\AppData\\Local\\Temp\\whitney-sample-i6mebrfi\\src\\app_006_indirect_tool_response_agent.py",
+    "region": "code",
+    "account_id": "code-scan",
+    "remediation": "Route untrusted input through a recognised guardrail before the LLM call. See Whitney's recognised-guardrail list for supported vendors. Weak defences do not count \u00e2\u20ac\u201d replace them with a dedicated AI firewall or LLM-as-judge.\n",
+    "soc2_controls": [
+      "CC6.1",
+      "CC7.2"
+    ],
+    "cis_aws_controls": [],
+    "cis_azure_controls": [],
+    "mcsb_controls": [],
+    "iso27001_controls": [],
+    "hipaa_controls": [],
+    "details": {
+      "file_path": "C:\\Users\\KKMOOK~1\\AppData\\Local\\Temp\\whitney-sample-i6mebrfi\\src\\app_006_indirect_tool_response_agent.py",
+      "line_number": 23,
+      "end_line": 23,
+      "code_snippet": "requires login",
+      "semgrep_rule_id": "whitney.rules.code-prompt-injection-risk",
+      "engine": "semgrep",
+      "cwe": [
+        "CWE-94"
+      ],
+      "owasp": [
+        "LLM01:2025"
+      ],
+      "owasp_agentic": [
+        "AA01:2026"
+      ],
+      "confidence": "MEDIUM",
+      "technology": [
+        "openai",
+        "anthropic",
+        "langchain",
+        "llamaindex",
+        "streamlit",
+        "flask",
+        "fastapi",
+        "django"
+      ]
+    }
+  },
+  {
+    "check_id": "code-prompt-injection-risk",
+    "title": "Untrusted input reaches an LLM call without passing through a recognised guardrail. Apply AWS Bedrock Guardrails, NeMo G",
+    "description": "Untrusted input reaches an LLM call without passing through a recognised guardrail. Apply AWS Bedrock Guardrails, NeMo Guardrails, Lakera Guard, Azure AI Content Safety / Prompt Shields, OpenAI Moderation, DeepKeep, or a correct LLM-as-Judge pre-call before invocation. Weak defences (Pydantic regex validation, length caps, keyword blocklists) are not recognised \u00e2\u20ac\u201d they are bypassable via Unicode, Cyrillic homoglyphs, Base64, language switching, paraphrase, or token splitting.",
+    "severity": "high",
+    "status": "fail",
+    "domain": "ai_governance",
+    "resource_type": "Code::Repository::File",
+    "resource_id": "C:\\Users\\KKMOOK~1\\AppData\\Local\\Temp\\whitney-sample-i6mebrfi\\src\\app_008_indirect_mcp_tool_response.py",
+    "region": "code",
+    "account_id": "code-scan",
+    "remediation": "Route untrusted input through a recognised guardrail before the LLM call. See Whitney's recognised-guardrail list for supported vendors. Weak defences do not count \u00e2\u20ac\u201d replace them with a dedicated AI firewall or LLM-as-judge.\n",
+    "soc2_controls": [
+      "CC6.1",
+      "CC7.2"
+    ],
+    "cis_aws_controls": [],
+    "cis_azure_controls": [],
+    "mcsb_controls": [],
+    "iso27001_controls": [],
+    "hipaa_controls": [],
+    "details": {
+      "file_path": "C:\\Users\\KKMOOK~1\\AppData\\Local\\Temp\\whitney-sample-i6mebrfi\\src\\app_008_indirect_mcp_tool_response.py",
+      "line_number": 26,
+      "end_line": 39,
+      "code_snippet": "requires login",
+      "semgrep_rule_id": "whitney.rules.code-prompt-injection-risk",
+      "engine": "semgrep",
+      "cwe": [
+        "CWE-94"
+      ],
+      "owasp": [
+        "LLM01:2025"
+      ],
+      "owasp_agentic": [
+        "AA01:2026"
+      ],
+      "confidence": "MEDIUM",
+      "technology": [
+        "openai",
+        "anthropic",
+        "langchain",
+        "llamaindex",
+        "streamlit",
+        "flask",
+        "fastapi",
+        "django"
+      ]
+    }
+  }
+]
+</script>
+</body>
+</html>

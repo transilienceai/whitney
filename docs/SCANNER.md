@@ -86,19 +86,30 @@ On 5 blind-test repositories (`aimaster-dev/chatbot-using-rag-and-langchain`, `L
 ```bash
 pip install semgrep
 
-# Zero-LLM scan — default, reproducible, no API key required
-py -3.12 -c "from whitney.code.scanner import scan_repository; print(scan_repository('.'))"
+# Default CLI table
+whitney scan ./my-repo
+
+# Standalone HTML report (single self-contained file, demo-ready)
+whitney scan ./my-repo --html report.html
+
+# JSON for tooling integration
+whitney scan ./my-repo --json > findings.json
+
+# AI dependency SBOM with OSV.dev CVE enrichment
+whitney sbom ./my-repo --html sbom.html --enrich
 
 # Triage mode — Claude Opus classifies LLM-as-judge prompts
 export ANTHROPIC_API_KEY=sk-ant-...
 export WHITNEY_STRICT_JUDGE_PROMPTS=1
-py -3.12 -c "from whitney.code.scanner import scan_repository; print(scan_repository('.'))"
+whitney scan ./my-repo --html report.html
 
-# CI / offline — mock heuristic mode
+# CI / offline — mock heuristic mode (no API calls)
 export WHITNEY_STRICT_JUDGE_PROMPTS=1
 export WHITNEY_TRIAGE_MOCK=1
-py -3.12 -m tests.test_whitney.corpus.eval
+py -3.12 -m tests.corpus.eval
 ```
+
+The `--html` flag (added in v0.2) writes a self-contained HTML file with CSS inlined and the raw findings JSON embedded in a `<script type="application/json">` block — power users can extract via `cat report.html | sed -n '/whitney-data/,/<\/script>/p' | head -n -1 | tail -n +2 | jq`. The `--enrich` flag on `sbom` cross-references each SDK against [OSV.dev](https://osv.dev) (Google's free public vulnerability database, no auth required); results cached daily under `~/.whitney/osv_cache.json`.
 
 Path excludes are applied automatically: `venv`, `.venv`, `env`, `__pycache__`, `node_modules`, `tests`, `test_*`, `fixtures`, `examples`, `docs`, `dist`, `build`, `site-packages`. A finding inside a test fixture is a false positive from the developer's perspective, regardless of its technical correctness.
 
